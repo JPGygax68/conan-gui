@@ -1,5 +1,7 @@
 #include <algorithm>
 #include <cstdio>
+#include <iostream>
+#include <future>
 #include <fmt/core.h>
 #include "./database.h"
 #include "./repo_reader.h"
@@ -12,22 +14,23 @@ namespace Conan {
         stop_reader_thread();
     }
 
-    void Repository_reader::requeue_all()
+    auto Repository_reader::requeue_all() -> std::future<void>
     {
-        // Get list of all repositories
-        // TODO: whenn cppcoro becomes available as a Conan package, create a generator 
-        auto file_ptr = _popen("conan remote list", "r");
-        if (!file_ptr) throw std::system_error(errno, std::generic_category());
-        while (!feof(file_ptr)) {
-            char buffer[1024];
-            if (fgets(buffer, sizeof(buffer), file_ptr)) {
-                std::string input = buffer;
-                input.erase(std::remove(input.begin(), input.end(), '\n'), input.end());
-                auto name = input.substr(0, input.find(":"));
-                queue_repository(name);
+        return std::async(std::launch::async, [&]() {
+            auto file_ptr = _popen("conan remote list", "r");
+            if (!file_ptr) throw std::system_error(errno, std::generic_category());
+            while (!feof(file_ptr)) {
+                char buffer[1024];
+                if (fgets(buffer, sizeof(buffer), file_ptr)) {
+                    std::string input = buffer;
+                    input.erase(std::remove(input.begin(), input.end(), '\n'), input.end());
+                    auto name = input.substr(0, input.find(":"));
+                    std::cout << name << std::endl;
+                    queue_repository(name);
+                }
             }
-        }
-        fclose(file_ptr);
+            fclose(file_ptr);
+        });
     }
 
     void Repository_reader::queue_repository(std::string_view repo)
@@ -50,8 +53,29 @@ namespace Conan {
             std::unique_lock<std::mutex> lk(task_queue.mutex);
             reader_cv.wait(lk, [this] { return !task_queue.empty(); });
 
+            auto& task = task_queue.top();
 
-            // TODO: read, write to database; send a signal ?
+            std::cout << "Searching remote " << task.repository << ", letter " << task.letter << std::endl;
+
+            auto file_ptr = _popen(fmt::format("conan search -r {} {}* --raw", task.repository, task.letter).c_str(), "r");
+            if (!file_ptr) throw std::system_error(errno, std::generic_category());
+
+            while (!feof(file_ptr)) {
+                char buffer[1024];
+                if (fgets(buffer, sizeof(buffer), file_ptr)) {
+                    std::string input = buffer;
+                    input.erase(std::remove(input.begin(), input.end(), '\n'), input.end());
+                    //std::cout << input << std::endl;
+                    auto split_pos = input.find("/");
+                    auto name = input.substr(0, split_pos);
+                    auto specifier = input.substr(split_pos + 1);
+                    // TODO: insert into database (with notification to database clients!)
+                    std::cout << name << ": " << specifier << std::endl;
+                    database.upsert_package(task.repository, input);
+                }
+            }
+
+            task_queue.pop();
         }
     }
 

@@ -3,6 +3,7 @@
 #include <string_view>
 #include <queue>
 #include <mutex>
+#include <future>
 #include "./database.h"
 
 
@@ -15,7 +16,7 @@ namespace Conan {
 
         ~Repository_reader();
 
-        void requeue_all();
+        auto requeue_all() -> std::future<void>;
 
         void queue_repository(std::string_view repo);
 
@@ -25,16 +26,16 @@ namespace Conan {
         struct Task {
             std::string     repository;
             char            letter;
-            bool operator < (const Task& other) const {
-                if (repository < other.repository) return true;
-                if (repository > other.repository) return false;
-                if (letter < other.letter) return true;
-                return false;
+            bool operator > (const Task& other) const {
+                if (repository < other.repository) return false;
+                if (repository > other.repository) return true;
+                if (letter < other.letter) return false;
+                return true;
             }
             bool operator == (const Task& other) const = default;
         };
 
-        class Task_queue : public std::priority_queue<Task, std::vector<Task>> {
+        class Task_queue : public std::priority_queue<Task, std::vector<Task>, std::greater<Task>> {
         public:
             void add_or_requeue(const Task& task) {
                 std::lock_guard<std::mutex> lock{ mutex };

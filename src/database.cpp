@@ -1,5 +1,6 @@
 #include <string>
 #include <cstdlib>
+#include <iostream>
 #include <stdexcept>
 #include <filesystem>
 #include <fmt/core.h>
@@ -11,6 +12,8 @@ namespace Conan {
     
     static void throw_sqlite_error(int err, const char *context) {
         using namespace std::string_literals;
+        auto error_text = sqlite3_errstr(err);
+        std::cerr << error_text << "; context: " << context << std::endl;
         throw std::runtime_error("SQLite error: "s + sqlite3_errstr(err) + " (" + std::to_string(err) + "); context: " + context);
     }
 
@@ -52,7 +55,7 @@ namespace Conan {
         if (db_err != 0) throw_sqlite_error(db_err, "trying to create packages table");
 
         db_err = sqlite3_exec(db_handle, R"(
-            create index if not exists remote_reference on packages (remote, reference);
+            create unique index if not exists remote_reference on packages (remote, reference);
         )", nullptr, nullptr, &errmsg);
         if (db_err != 0) throw_sqlite_error(db_err, "trying to create index remote_reference on packages table");
     }
@@ -71,7 +74,7 @@ namespace Conan {
         auto statement = fmt::format(R"(
             insert into packages (remote, reference, last_poll) 
             values('{0}', '{1}', datetime('now'))
-            on conflict (remote, reference) do update set last_poll = datetime('now');
+            on conflict (remote, reference) do update set last_poll=datetime('now');
         )", remote, reference);
         db_err = sqlite3_exec(db_handle, statement.c_str(), nullptr, nullptr, &errmsg);
         
