@@ -1,5 +1,6 @@
 #include <iostream>
 #include <cstdio>
+#include <map>
 #include <imgui.h>
 #include "./database.h"
 #include "./repo_reader.h"
@@ -13,12 +14,22 @@ int main(int, char **)
 
     auto initial_requeue = repo_reader.requeue_all();
 
+    auto package_list = database.get_package_list();
+
     imgui_init();
 
+    (void) initial_requeue.get();
+
     while (imgui_continue()) {
+    
         imgui_new_frame();
 
-        // ConanWindow();
+        if (ImGui::Begin("Conan")) {
+            for (const auto& pkg: package_list) {
+                ImGui::Selectable(pkg.c_str());
+            }
+        }
+        ImGui::End();
 
         imgui_frame_done();
     }

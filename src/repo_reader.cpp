@@ -50,10 +50,10 @@ namespace Conan {
     void Repository_reader::reader_func()
     {
         while (!terminate) {
-            std::unique_lock<std::mutex> lk(task_queue.mutex);
-            reader_cv.wait(lk, [this] { return !task_queue.empty(); });
-
-            auto& task = task_queue.top();
+            std::unique_lock<std::mutex> lock(task_queue.mutex);
+            reader_cv.wait(lock, [this] { return !task_queue.empty(); });
+            auto task = task_queue.top();
+            lock.unlock();
 
             std::cout << "Searching remote " << task.repository << ", letter " << task.letter << std::endl;
 
@@ -65,16 +65,15 @@ namespace Conan {
                 if (fgets(buffer, sizeof(buffer), file_ptr)) {
                     std::string input = buffer;
                     input.erase(std::remove(input.begin(), input.end(), '\n'), input.end());
-                    //std::cout << input << std::endl;
                     auto split_pos = input.find("/");
                     auto name = input.substr(0, split_pos);
                     auto specifier = input.substr(split_pos + 1);
-                    // TODO: insert into database (with notification to database clients!)
                     std::cout << name << ": " << specifier << std::endl;
                     database.upsert_package(task.repository, input);
                 }
             }
 
+            lock.lock();
             task_queue.pop();
         }
     }
