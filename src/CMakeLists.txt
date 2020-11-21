@@ -6,9 +6,12 @@ add_executable(
   ${PROJECT_NAME}
 
   main.cpp
-  #imgui/imgui.cpp imgui/imgui.h
-  #imgui/imgui_draw.cpp imgui/imgui_demo.cpp imgui/imgui_widgets.cpp
-  #imgui/backends/imgui_impl_sdl.cpp imgui/backends/imgui_impl_vulkan.cpp
+
+  imgui/imgui.cpp imgui/imgui.h
+  imgui/imgui_draw.cpp imgui/imgui_demo.cpp imgui/imgui_widgets.cpp
+  imgui/backends/imgui_impl_sdl.cpp imgui/backends/imgui_impl_vulkan.cpp
+
+  imgui_app.h imgui_app_vulkan.cpp
 
   database.cpp database.h
   repo_reader.cpp repo_reader.h
