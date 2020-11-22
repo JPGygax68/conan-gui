@@ -4,6 +4,7 @@
 #include <queue>
 #include <mutex>
 #include <future>
+#include "./async_data.h"
 #include "./database.h"
 
 
@@ -12,15 +13,18 @@ namespace Conan {
     class Repository_reader {
     public:
         
-        explicit Repository_reader(Database& db): database{db} {}
+        explicit Repository_reader(Database& db);
 
         ~Repository_reader();
 
+        [[deprecated]]
         auto requeue_all() -> std::future<void>;
 
+        [[deprecated]]
         void queue_repository(std::string_view repo);
 
-        void queue_single_task(std::string_view repo, char letter);
+        void filtered_read(std::string_view repo, std::string_view name_filter);
+        void filtered_read_all_repositories(std::string_view name_filter);
 
     private:
         struct Task {
@@ -62,10 +66,11 @@ namespace Conan {
         void stop_reader_thread();
         void reader_func();
 
-        void get_package_list_internal(std::string_view remote, char first_letter);
-        void get_package_list(std::string_view remote, char first_letter);
+        void get_package_list(std::string_view remote, std::string_view name_filter);
 
         Database&                   database;
+
+        async_data<std::vector<std::string>> remotes_ad;
 
         std::thread                 reader_thread;
         Task_queue                  task_queue;

@@ -13,6 +13,7 @@ struct Filtered_package_list {
     std::future<Package_list>   future;
     bool                        acquired = false;
     Package_list                packages;
+    std::future<void>           requery_future;
 };
 
 struct Package_tree  {
@@ -46,16 +47,30 @@ int main(int, char **)
             if (ImGui::Button("Re-read all repositories")) {
                 queued_op = repo_reader.requeue_all();
             }
-            // for (const auto& pkg: package_list) {
-            //     ImGui::Selectable(pkg.c_str());
-            // }
             for (auto it = tree.letters.begin(); it != tree.letters.end(); it++) {
+                ImGui::AlignTextToFramePadding();
                 auto letter = std::string{it->first};
                 if (ImGui::TreeNode(letter.c_str())) {
                     auto& sublist = it->second;
+                    ImGui::SameLine();
+                    if (sublist.requery_future.valid()) {
+                        using namespace std::chrono_literals;
+                        if (sublist.requery_future.wait_for(0us) == std::future_status::ready) {
+                            (void) sublist.requery_future.get();
+                            sublist.acquired = false;
+                        } else
+                            ImGui::TextUnformatted("(querying...)");
+                    } else {
+                        if (ImGui::Button("Re-query")) {
+                            sublist.requery_future = std::async(std::launch::async, [=, &repo_reader]() {
+                                repo_reader.filtered_read_all_repositories(std::string{letter});
+                            });
+                        }
+                    }
                     if (!sublist.acquired) {
                         if (!sublist.future.valid()) {
-                            sublist.future = std::async(std::launch::async, [=, &database]() { return database.get_package_list(letter); } );
+                            sublist.future = std::async(std::launch::async, [=, &database]() { 
+                                return database.get_package_list(letter); } );
                         }
                         using namespace std::chrono_literals;
                         auto result = sublist.future.wait_for(0s);

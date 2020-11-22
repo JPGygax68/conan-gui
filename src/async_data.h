@@ -32,6 +32,14 @@ struct async_data {
         return _result;
     }
 
+    auto& get() {
+        if (!_done) {
+            _result = _future.get();
+            _done = true;
+        }
+        return _result;
+    }
+
 private:
 
     bool _done = false;
@@ -40,8 +48,8 @@ private:
 
     void _check_future() {
         if (_future.valid() && _future.wait_for(std::chrono::nanoseconds(1)) == std::future_status::ready) {
-            _done = true;
             _result = _future.get();
+            _done = true;
         }
     }
 };

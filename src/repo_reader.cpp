@@ -8,7 +8,29 @@
 
 
 namespace Conan {
-
+    
+    Repository_reader::Repository_reader(Database& db) : 
+        database{ db }
+    {
+        remotes_ad.obtain([]() {
+            auto file_ptr = _popen("conan remote list", "r");
+            if (!file_ptr) throw std::system_error(errno, std::generic_category());
+            std::vector<std::string> list;
+            while (!feof(file_ptr)) {
+                char buffer[1024];
+                if (fgets(buffer, sizeof(buffer), file_ptr)) {
+                    std::string input = buffer;
+                    input.erase(std::remove(input.begin(), input.end(), '\n'), input.end());
+                    auto name = input.substr(0, input.find(":"));
+                    std::cout << name << std::endl;
+                    list.push_back(name);
+                }
+            }
+            fclose(file_ptr);
+            return list;
+        });
+    }
+    
     Repository_reader::~Repository_reader()
     {
         stop_reader_thread();
@@ -16,6 +38,13 @@ namespace Conan {
 
     auto Repository_reader::requeue_all() -> std::future<void>
     {
+#ifndef NOT_DEFINED
+        return std::async(std::launch::async, [this]() {
+            auto& remotes = remotes_ad.get();
+            for (auto& remote: remotes)
+                queue_repository(remote);
+        });
+#else
         return std::async(std::launch::async, [&]() {
             auto file_ptr = _popen("conan remote list", "r");
             if (!file_ptr) throw std::system_error(errno, std::generic_category());
@@ -31,22 +60,30 @@ namespace Conan {
             }
             fclose(file_ptr);
         });
+#endif
     }
 
     void Repository_reader::queue_repository(std::string_view repo)
     {
         for (char letter = 'A'; letter <= 'Z'; letter ++) {
-            queue_single_task(repo, letter);
-            queue_single_task(repo, letter + 'a' - 'A');
+            filtered_read(repo, std::string{letter});
+            filtered_read(repo, std::string{(char)(letter + 'a' - 'A')});
         }
     }
-    
-    void Repository_reader::queue_single_task(std::string_view repo, char letter)
+
+    void Repository_reader::filtered_read(std::string_view remote, std::string_view name_filter)
     {
-        task_queue.add_or_requeue(Task{ std::string{repo}, letter });
-        start_reader_thread_if_not_running();
+        get_package_list(remote, name_filter);
     }
 
+    void Repository_reader::filtered_read_all_repositories(std::string_view name_filter)
+    {
+        auto& remotes = remotes_ad.get();
+        for (auto& remote: remotes)
+            filtered_read(remote, name_filter);
+    }
+
+    [[deprecated]]
     void Repository_reader::reader_func()
     {
         while (!terminate) {
@@ -57,21 +94,7 @@ namespace Conan {
 
             std::cout << "Searching remote " << task.repository << ", letter " << task.letter << std::endl;
 
-            auto file_ptr = _popen(fmt::format("conan search -r {} {}* --raw", task.repository, task.letter).c_str(), "r");
-            if (!file_ptr) throw std::system_error(errno, std::generic_category());
-
-            while (!feof(file_ptr)) {
-                char buffer[1024];
-                if (fgets(buffer, sizeof(buffer), file_ptr)) {
-                    std::string input = buffer;
-                    input.erase(std::remove(input.begin(), input.end(), '\n'), input.end());
-                    auto split_pos = input.find("/");
-                    auto name = input.substr(0, split_pos);
-                    auto specifier = input.substr(split_pos + 1);
-                    std::cout << name << ": " << specifier << std::endl;
-                    database.upsert_package(task.repository, input);
-                }
-            }
+            get_package_list(task.repository, std::string{task.letter});
 
             lock.lock();
             task_queue.pop();
@@ -95,9 +118,9 @@ namespace Conan {
         }
     }
 
-    void Repository_reader::get_package_list_internal(std::string_view remote, char first_letter) 
+    void Repository_reader::get_package_list(std::string_view remote, std::string_view name_filter) 
     {
-        auto file_ptr = _popen(fmt::format("conan search -r {} {}* --raw", remote, first_letter).c_str(), "r");
+        auto file_ptr = _popen(fmt::format("conan search -r {} {}* --raw", remote, name_filter).c_str(), "r");
         if (!file_ptr) throw std::system_error(errno, std::generic_category());
 
         auto& db = Database::instance();
@@ -117,15 +140,5 @@ namespace Conan {
 
         fclose(file_ptr);
     }
-
-    void Repository_reader::get_package_list(std::string_view remote, char first_letter) 
-    {
-        get_package_list_internal(remote, first_letter);
-
-        if (first_letter >= 'A' && first_letter <= 'Z') {
-            get_package_list_internal(remote, first_letter + 'a' - 'A');
-        }
-    }
-
 
 } // Conan
