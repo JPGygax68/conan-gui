@@ -81,13 +81,13 @@ namespace Conan {
         if (db_err != 0) throw_sqlite_error(db_err, "trying to insert/upsert into packages table");
     }
 
-    auto Database::get_package_list() -> std::vector<std::string>
+    auto Database::get_package_list(std::string_view name_filter) -> Package_list
     {
-        std::vector<std::string> list;
+        Package_list list;
 
-        auto db_err = sqlite3_exec(db_handle, R"(
-            select * from packages;
-        )", [](void *list_, int coln, char *textv[], char *namev[]) -> int {
+        auto db_err = sqlite3_exec(db_handle, fmt::format(R"(
+            select * from packages where reference like '{0}%';
+        )", name_filter).c_str(), [](void *list_, int coln, char *textv[], char *namev[]) -> int {
             auto plst = static_cast<decltype(list)*>(list_);            
             plst->push_back(std::string{textv[0]} + ":" + textv[1]);
             return 0;
