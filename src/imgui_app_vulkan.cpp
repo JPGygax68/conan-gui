@@ -344,7 +344,7 @@ static bool show_demo_window = true;
 static bool show_another_window = false;
 static ImVec4 clear_color = ImVec4(0.45f, 0.55f, 0.60f, 1.00f);
 
-void imgui_init()
+void imgui_init(const char *window_title)
 {
     using namespace std::string_literals;
 
@@ -362,7 +362,7 @@ void imgui_init()
 
     // Setup window
     SDL_WindowFlags window_flags = (SDL_WindowFlags)(SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI);
-    window = SDL_CreateWindow("Dear ImGui SDL2+Vulkan example", SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, DM.w * 3 / 4, DM.h * 3 / 4, window_flags);
+    window = SDL_CreateWindow(window_title, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, DM.w * 3 / 4, DM.h * 3 / 4, window_flags);
 
     // Setup Vulkan
     uint32_t extensions_count = 0;

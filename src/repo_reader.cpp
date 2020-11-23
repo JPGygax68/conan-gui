@@ -22,7 +22,7 @@ namespace Conan {
                     std::string input = buffer;
                     input.erase(std::remove(input.begin(), input.end(), '\n'), input.end());
                     auto name = input.substr(0, input.find(":"));
-                    std::cout << name << std::endl;
+                    std::cout << name << std::endl; // TODO: replace with log
                     list.push_back(name);
                 }
             }
@@ -130,7 +130,7 @@ namespace Conan {
             if (fgets(buffer, sizeof(buffer), file_ptr)) {
                 std::string input = buffer;
                 input.erase(std::remove(input.begin(), input.end(), '\n'), input.end());
-                //std::cout << input << std::endl;
+                std::cout << input << std::endl;
                 // auto split_pos = input.find("/");
                 // auto name = input.substr(0, split_pos);
                 // auto specifier = input.substr(split_pos + 1);

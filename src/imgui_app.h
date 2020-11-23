@@ -1,7 +1,7 @@
 #pragma once
 
 
-void imgui_init();
+void imgui_init(const char *window_title);
 
 bool imgui_continue();
 
