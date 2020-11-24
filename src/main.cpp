@@ -10,8 +10,8 @@
 using namespace Conan;
 
 struct Filtered_package_list {
-    std::future<Package_list>   query_future;
-    bool                        acquired = false;
+    std::future<Package_list>   query_future;       // querying from sqlite
+    bool                        acquired = false;   // TODO: replace with timestamp ?
     Package_list                packages;
     std::future<void>           refresh_future;     // re-querying from Conan
 };
@@ -87,7 +87,9 @@ int main(int, char **)
                             ImGui::TextUnformatted("(No packages)");
                         else
                             for (const auto& package: sublist.packages) {
-                                ImGui::Selectable(package.c_str());
+                                ImGui::Selectable(package.name.c_str());
+                                ImGui::SameLine();
+                                ImGui::TextUnformatted(package.repository.c_str());
                             }
                     }
                     ImGui::TreePop();

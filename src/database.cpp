@@ -45,6 +45,15 @@ namespace Conan {
         db_err = sqlite3_open(db_path.string().c_str(), &db_handle);
         if (db_err != SQLITE_OK) throw_sqlite_error(db_err, "trying to open/create database");
 
+        unsigned version = 0;
+        db_err = sqlite3_exec(db_handle, "PRAGMA user_version",
+            [](void* version_, int coln, char* textv[], char* namev[]) -> int {
+            auto pver = static_cast<decltype(version)*>(version_);
+            *pver = std::stoi(textv[0]);
+            return 0;
+        }, &version, nullptr);
+        if (db_err != 0) throw_sqlite_error(db_err, "trying to retrieve user_version");
+
         db_err = sqlite3_exec(db_handle, R"(
             create table if not exists packages (
                 remote STRING,
@@ -53,11 +62,31 @@ namespace Conan {
             );
         )", nullptr, nullptr, &errmsg);
         if (db_err != 0) throw_sqlite_error(db_err, "trying to create packages table");
+        
+        if (version == 0) {
+            db_err = sqlite3_exec(db_handle, R"(
+                drop table if exists packages_old;
+                create table packages_old as select * from packages;
+                drop table packages;
+                create table packages as select * from packages_old;
+                pragma user_version = 1;
+            )", nullptr, nullptr, &errmsg);
+            if (db_err != 0) throw_sqlite_error(db_err, "trying to add primary key to packages table");
+        }
 
         db_err = sqlite3_exec(db_handle, R"(
             create unique index if not exists remote_reference on packages (remote, reference);
         )", nullptr, nullptr, &errmsg);
         if (db_err != 0) throw_sqlite_error(db_err, "trying to create index remote_reference on packages table");
+
+        db_err = sqlite3_exec(db_handle, R"(
+            create table if not exists package_info (
+                remote STRING,
+                reference STRING,
+                last_poll DATETIME
+            );
+        )", nullptr, nullptr, &errmsg);
+        if (db_err != 0) throw_sqlite_error(db_err, "trying to create packages table");
     }
 
     Database::~Database()
@@ -89,7 +118,10 @@ namespace Conan {
             select * from packages where reference like '{0}%';
         )", name_filter).c_str(), [](void *list_, int coln, char *textv[], char *namev[]) -> int {
             auto plst = static_cast<decltype(list)*>(list_);            
-            plst->push_back(std::string{textv[0]} + ":" + textv[1]);
+            plst->push_back({
+                .name = textv[1],
+                .repository = textv[0]
+                });
             return 0;
         }, &list, nullptr);
         if (db_err != 0) throw_sqlite_error(db_err, "trying to query packages");

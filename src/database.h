@@ -9,7 +9,13 @@
 
 namespace Conan {
 
-    using Package_list = std::vector<std::string>; // TODO: more info than just name
+    struct Package_info {
+        std::string             name;
+        std::string             repository;
+        // TODO: more ? queries ?
+    };
+
+    using Package_list = std::vector<Package_info>;
 
     class Database {
     public:
