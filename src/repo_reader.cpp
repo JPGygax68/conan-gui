@@ -2,6 +2,8 @@
 #include <cstdio>
 #include <iostream>
 #include <future>
+#include <regex>
+#include <cassert>
 #include <fmt/core.h>
 #include "./database.h"
 #include "./repo_reader.h"
@@ -76,11 +78,16 @@ namespace Conan {
         get_package_list(remote, name_filter);
     }
 
-    void Repository_reader::filtered_read_all_repositories(std::string_view name_filter)
+    void Repository_reader::read_letter_all_repositories(char first_letter)
     {
+        assert(first_letter >= 'A' && first_letter <= 'Z');
+
         auto& remotes = remotes_ad.get();
-        for (auto& remote: remotes)
-            filtered_read(remote, name_filter);
+        for (auto& remote: remotes) {
+            filtered_read(remote, {&first_letter, 1});
+            char letter_lc = first_letter + 'a' - 'A';
+            filtered_read(remote, {&letter_lc, 1});
+        }
     }
 
     [[deprecated]]
@@ -125,15 +132,20 @@ namespace Conan {
 
         auto& db = Database::instance();
 
+        auto re = std::regex("([^/]+)/([^@]+)(?:@([^/]+)/(.+))?");
+
         while (!feof(file_ptr)) {
             char buffer[1024];
             if (fgets(buffer, sizeof(buffer), file_ptr)) {
                 std::string input = buffer;
                 input.erase(std::remove(input.begin(), input.end(), '\n'), input.end());
                 std::cout << input << std::endl;
-                // auto split_pos = input.find("/");
-                // auto name = input.substr(0, split_pos);
-                // auto specifier = input.substr(split_pos + 1);
+                std::smatch m;
+                if (std::regex_match(input, m, re)) {
+                    std::cout << "Package name: " << m[1] << ", version: " << m[2] << ", user: " << m[3] << ", channel: " << m[4] << std::endl;
+                } else {
+                    std::cerr << "***FAILED to parse package specifier \"" << input << "\"" << std::endl;
+                }
                 db.upsert_package(remote, input);
             }
         }

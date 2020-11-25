@@ -49,8 +49,8 @@ int main(int, char **)
             }
             for (auto it = tree.letters.begin(); it != tree.letters.end(); it++) {
                 ImGui::AlignTextToFramePadding();
-                auto letter = std::string{it->first};
-                if (ImGui::TreeNodeEx(letter.c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
+                auto letter = it->first;
+                if (ImGui::TreeNodeEx(std::string{letter}.c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
                     auto& sublist = it->second;
                     ImGui::SameLine();
                     if (sublist.refresh_future.valid()) {
@@ -63,14 +63,14 @@ int main(int, char **)
                     } else {
                         if (ImGui::Button("Re-query")) {
                             sublist.refresh_future = std::async(std::launch::async, [=, &repo_reader]() {
-                                repo_reader.filtered_read_all_repositories(std::string{letter});
+                                repo_reader.read_letter_all_repositories(letter);
                             });
                         }
                     }
                     if (!sublist.acquired) {
                         if (!sublist.query_future.valid()) {
                             sublist.query_future = std::async(std::launch::async, [=, &database]() { 
-                                return database.get_package_list(letter); } );
+                                return database.get_package_list(std::string{letter}); } );
                         }
                         using namespace std::chrono_literals;
                         auto result = sublist.query_future.wait_for(0s);

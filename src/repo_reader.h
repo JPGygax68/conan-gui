@@ -24,7 +24,7 @@ namespace Conan {
         void queue_repository(std::string_view repo);
 
         void filtered_read(std::string_view repo, std::string_view name_filter);
-        void filtered_read_all_repositories(std::string_view name_filter);
+        void read_letter_all_repositories(char first_letter);
 
     private:
         struct Task {
