@@ -140,13 +140,14 @@ namespace Conan {
                 std::string input = buffer;
                 input.erase(std::remove(input.begin(), input.end(), '\n'), input.end());
                 std::cout << input << std::endl;
+                db.upsert_package(remote, input);
                 std::smatch m;
                 if (std::regex_match(input, m, re)) {
                     std::cout << "Package name: " << m[1] << ", version: " << m[2] << ", user: " << m[3] << ", channel: " << m[4] << std::endl;
+                    db.upsert_package2(remote, m[1].str(), m[2].str(), m[3].str(), m[4].str());
                 } else {
                     std::cerr << "***FAILED to parse package specifier \"" << input << "\"" << std::endl;
                 }
-                db.upsert_package(remote, input);
             }
         }
 

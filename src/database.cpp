@@ -10,11 +10,12 @@
 
 namespace Conan {
     
-    static void throw_sqlite_error(int err, const char *context) {
+    static void throw_sqlite_error(int category, const char *err_msg, std::string_view context = "") {
         using namespace std::string_literals;
-        auto error_text = sqlite3_errstr(err);
-        std::cerr << error_text << "; context: " << context << std::endl;
-        throw std::runtime_error("SQLite error: "s + sqlite3_errstr(err) + " (" + std::to_string(err) + "); context: " + context);
+        auto msg = fmt::format("SQLite error (category: {0}): {1}", sqlite3_errstr(category), err_msg);
+        if (!context.empty()) { msg += "; context: "; msg += context; }
+        std::cerr << msg << std::endl;
+        throw std::runtime_error(msg);
     }
 
     Database::Database()
@@ -87,6 +88,22 @@ namespace Conan {
             );
         )", nullptr, nullptr, &errmsg);
         if (db_err != 0) throw_sqlite_error(db_err, "trying to create packages table");
+
+        exec(R"(
+            create table if not exists packages2 (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                remote STRING NOT NULL,
+                name STRING NOT NULL,
+                version STRING NOT NULL,
+                user STRING,
+                channel STRING,
+                last_poll DATETIME
+            )
+        )", "trying to create packages2 table");
+        if (version <= 5) 
+            exec("create unique index if not exists packages2_unique on packages2(remote, name, version, user, channel)");
+
+        exec("pragma user_version = 6;", "trying to set database version");
     }
 
     Database::~Database()
@@ -102,12 +119,23 @@ namespace Conan {
 
         auto statement = fmt::format(R"(
             insert into packages (remote, reference, last_poll) 
-            values('{0}', '{1}', datetime('now'))
+                values('{0}', '{1}', datetime('now'))
             on conflict (remote, reference) do update set last_poll=datetime('now');
         )", remote, reference);
         db_err = sqlite3_exec(db_handle, statement.c_str(), nullptr, nullptr, &errmsg);
         
         if (db_err != 0) throw_sqlite_error(db_err, "trying to insert/upsert into packages table");
+    }
+
+    void Database::upsert_package2(std::string_view remote, std::string_view name, std::string_view version, std::string_view user, std::string_view channel)
+    {
+        auto statement = fmt::format(R"(
+            insert into packages2 (remote, name, version, user, channel, last_poll) 
+                values('{0}', '{1}', '{2}', '{3}', '{4}', datetime('now'))
+            on conflict (remote, name, version, user, channel) do update set last_poll=datetime('now');
+        )", remote, name, version, user, channel);
+
+        exec(statement.c_str(), "trying to upsert into package2");
     }
 
     auto Database::get_package_list(std::string_view name_filter) -> Package_list
@@ -127,6 +155,61 @@ namespace Conan {
         if (db_err != 0) throw_sqlite_error(db_err, "trying to query packages");
 
         return list;
+    }
+
+    auto Database::query_single_row(const char *query, const char *context) -> std::vector<std::string>
+    {
+        char *errmsg;
+        int dberr;
+
+        std::vector<std::string> output;
+
+        dberr = sqlite3_exec(db_handle, query, [](void* out_, int coln, char* textv[], char* namev[]) -> int {
+            auto& pout = *static_cast<decltype(output)*>(out_);
+            for (auto i = 0; i < coln; i ++) pout.push_back(textv[i]);
+            return 0;
+        }, &output, &errmsg);
+
+        if (dberr != 0) throw_sqlite_error(dberr, context);
+
+        return output;
+    }
+
+    void Database::exec(const char *statement, std::string_view context)
+    {
+        char* errmsg;
+        int db_err;
+
+        db_err = sqlite3_exec(db_handle, statement, nullptr, nullptr, &errmsg);
+
+        if (db_err != 0) throw_sqlite_error(db_err, errmsg, context);
+    }
+
+    auto Database::get_row_id(std::string_view table, std::string_view where_clause) -> int64_t
+    {
+        auto statement = fmt::format("select rowid from {0} where {1}", table, where_clause);
+        auto fields = query_single_row( statement.c_str(), fmt::format("trying to get rowid of table \"{0}\"", table).c_str());
+        return fields.empty() ? 0 : std::stoi(fields[0]);
+    }
+
+    auto Database::insert(std::string_view table, std::string_view columns, std::string_view values) -> int64_t
+    {
+        char* errmsg;
+        int db_err;
+
+        auto statement = fmt::format(R"(
+            insert into {0} ({1}) values({2})
+        )", table, columns, values);
+        db_err = sqlite3_exec(db_handle, statement.c_str(), nullptr, nullptr, &errmsg);
+
+        if (db_err != 0) throw_sqlite_error(db_err, errmsg, fmt::format("trying to insert into table \"{0}\"", table));
+
+        return sqlite3_last_insert_rowid(db_handle);
+    }
+
+    void Database::drop_table(std::string_view name)
+    {
+        exec(fmt::format("drop table if exists {0}", name).c_str(), fmt::format("trying to drop table \"{0}\"", name));
     }
 
 } // ns Conans
