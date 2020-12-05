@@ -3,9 +3,22 @@
 #include <iostream>
 #include <stdexcept>
 #include <filesystem>
+#include <algorithm>
+#include <numeric>
+#include <concepts>
 #include <fmt/core.h>
 
 #include "./database.h"
+
+
+// Utilities (TODO: move?)
+
+template <typename Seq> // requires sequence_of_convertibles_to_string<Seq>
+auto join_strings(Seq strings, std::string_view separator = ",") -> std::string
+{
+    return std::accumulate(strings.begin(), strings.end(), std::string(),
+        [=](auto a, auto b) { return std::string{ a } + std::string{a.length() > 0 ? separator : ""} + std::string{ b }; });
+}
 
 
 namespace Conan {
@@ -103,7 +116,23 @@ namespace Conan {
         if (version <= 5) 
             exec("create unique index if not exists packages2_unique on packages2(remote, name, version, user, channel)");
 
-        exec("pragma user_version = 6;", "trying to set database version");
+        exec(R"(
+            create table if not exists pkg_info (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                pkg_id INTEGER, 
+                recipe_id STRING NOT NULL,
+                remote STRING,
+                url STRING,
+                license STRING,
+                description STRING,
+                provides STRING,
+                creation_date DATETIME,
+                last_poll DATETIME,
+                FOREIGN KEY (pkg_id) REFERENCES packages2(id)
+            )
+        )", "trying to create pkg_info table");
+
+        exec("pragma user_version = 7;", "trying to set database version");
     }
 
     Database::~Database()
@@ -138,23 +167,39 @@ namespace Conan {
         exec(statement.c_str(), "trying to upsert into package2");
     }
 
-    auto Database::get_package_list(std::string_view name_filter) -> Package_list
+    auto Database::get_package_designators(std::string_view name_filter) -> Package_designators
     {
-        Package_list list;
+        Package_designators list;
+        char *errmsg;
 
         auto db_err = sqlite3_exec(db_handle, fmt::format(R"(
-            select * from packages where reference like '{0}%';
+            select distinct name, remote from packages2 where name like '{0}%';
         )", name_filter).c_str(), [](void *list_, int coln, char *textv[], char *namev[]) -> int {
             auto plst = static_cast<decltype(list)*>(list_);            
-            plst->push_back({
-                .name = textv[1],
-                .repository = textv[0]
-                });
+            plst->push_back({ .name = textv[0], .repository = textv[1] });
             return 0;
-        }, &list, nullptr);
-        if (db_err != 0) throw_sqlite_error(db_err, "trying to query packages");
+        }, &list, &errmsg);
+        if (db_err != 0) throw_sqlite_error(db_err, errmsg, "trying to query packages");
 
         return list;
+    }
+
+    auto Database::get_package(std::string_view remote, std::string_view pkg_name) -> Package
+    {
+        Package pkg = { .remote = std::string{remote} };
+
+        select(
+            fmt::format("select user, channel, version from packages2 where remote='{0}' and name='{1}'", 
+                remote, pkg_name).c_str(), 
+            [&](int col_count, const char * const col_values[], const char * const col_names[]) -> int {
+                auto& user = pkg.users[col_values[0]];
+                auto& channel = user.channels[col_values[1]];
+                auto& version = channel.versions[col_values[2]];
+                return 0;
+            }
+        );
+
+        return pkg;
     }
 
     auto Database::query_single_row(const char *query, const char *context) -> std::vector<std::string>
@@ -185,6 +230,16 @@ namespace Conan {
         if (db_err != 0) throw_sqlite_error(db_err, errmsg, context);
     }
 
+    void Database::select(const char *statement, select_callback cb)
+    {
+        char* errmsg;
+        auto db_err = sqlite3_exec(db_handle, statement, [](void* data, int coln, char* textv[], char* namev[]) -> int {
+            select_callback& cb = *static_cast<select_callback*>(data);
+            return cb(coln, (const char * const *)textv, (const char * const *)namev);
+        }, &cb, &errmsg);
+        if (db_err != 0) throw_sqlite_error(db_err, errmsg);
+    }
+
     auto Database::get_row_id(std::string_view table, std::string_view where_clause) -> int64_t
     {
         auto statement = fmt::format("select rowid from {0} where {1}", table, where_clause);
@@ -210,6 +265,54 @@ namespace Conan {
     void Database::drop_table(std::string_view name)
     {
         exec(fmt::format("drop table if exists {0}", name).c_str(), fmt::format("trying to drop table \"{0}\"", name));
+    }
+
+    auto Database::get_tree(
+        std::string_view table,
+        std::initializer_list<std::string_view> group_by_cols,
+        std::initializer_list<std::string_view> data_cols, std::string where_clause = ""
+    ) -> Query_result_node
+    {
+        using namespace std::string_literals;
+
+        auto group_col_list = join_strings(group_by_cols);
+        auto data_col_list = join_strings(data_cols);
+
+        std::string statement = "select "s + group_col_list + ", " + data_col_list
+            + " from " + std::string{table}
+            + (!where_clause.empty() ? " where "s + std::string{where_clause} : ""s)
+            + " order by " + group_col_list // TODO: not necessary
+            ;
+
+        Query_result_node root;
+
+        select(statement.c_str(), [&](int col_count, const char* const col_values[], const char* const col_names[]) -> int {
+            auto i = 0U;
+            auto node = &root;
+            for (; i < group_by_cols.size(); i ++) {
+                const auto& key = col_values[i];
+                // Last grouping column ?
+                if (i == group_by_cols.size() -1) {
+                    if (node->index() != 1) 
+                        *node = Row_packet_node{};
+                    auto& row_packet = std::get<1>(*node);
+                    auto row = Column_values{};
+                    for (auto j = 0U; (i + j) < col_count; j++) {
+                        const char* value = col_values[i + j];
+                        row.push_back(value ? value : "");
+                    }
+                    row_packet.push_back(row);
+                }
+                else {
+                    if (node->index() == std::variant_npos) 
+                        *node = Grouping_node{};
+                    node = &std::get<0>(*node)[key ? key : ""];
+                }
+            }
+            return 0;
+        });
+
+        return root;
     }
 
 } // ns Conans

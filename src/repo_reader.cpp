@@ -40,29 +40,11 @@ namespace Conan {
 
     auto Repository_reader::requeue_all() -> std::future<void>
     {
-#ifndef NOT_DEFINED
         return std::async(std::launch::async, [this]() {
             auto& remotes = remotes_ad.get();
             for (auto& remote: remotes)
                 queue_repository(remote);
         });
-#else
-        return std::async(std::launch::async, [&]() {
-            auto file_ptr = _popen("conan remote list", "r");
-            if (!file_ptr) throw std::system_error(errno, std::generic_category());
-            while (!feof(file_ptr)) {
-                char buffer[1024];
-                if (fgets(buffer, sizeof(buffer), file_ptr)) {
-                    std::string input = buffer;
-                    input.erase(std::remove(input.begin(), input.end(), '\n'), input.end());
-                    auto name = input.substr(0, input.find(":"));
-                    std::cout << name << std::endl;
-                    queue_repository(name);
-                }
-            }
-            fclose(file_ptr);
-        });
-#endif
     }
 
     void Repository_reader::queue_repository(std::string_view repo)
@@ -130,7 +112,8 @@ namespace Conan {
         auto file_ptr = _popen(fmt::format("conan search -r {} {}* --raw", remote, name_filter).c_str(), "r");
         if (!file_ptr) throw std::system_error(errno, std::generic_category());
 
-        auto& db = Database::instance();
+        // auto& db = Database::instance();
+        Database db;
 
         auto re = std::regex("([^/]+)/([^@]+)(?:@([^/]+)/(.+))?");
 
@@ -140,7 +123,7 @@ namespace Conan {
                 std::string input = buffer;
                 input.erase(std::remove(input.begin(), input.end(), '\n'), input.end());
                 std::cout << input << std::endl;
-                db.upsert_package(remote, input);
+                db.upsert_package(remote, input); // TODO: remove
                 std::smatch m;
                 if (std::regex_match(input, m, re)) {
                     std::cout << "Package name: " << m[1] << ", version: " << m[2] << ", user: " << m[3] << ", channel: " << m[4] << std::endl;

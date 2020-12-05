@@ -2,6 +2,7 @@
 #include <cstdio>
 #include <map>
 #include <imgui.h>
+#include <fmt/core.h>
 #include "./database.h"
 #include "./repo_reader.h"
 #include "./imgui_app.h"
@@ -9,21 +10,52 @@
 
 using namespace Conan;
 
-struct Filtered_package_list {
-    std::future<Package_list>   query_future;       // querying from sqlite
-    bool                        acquired = false;   // TODO: replace with timestamp ?
-    Package_list                packages;
-    std::future<void>           refresh_future;     // re-querying from Conan
+using Package_map = std::map<std::string, Package>;         // { remote, name}  -> package contents
+
+struct Filtered_packages {
+#ifdef OLD_CODE
+    std::future<Package_map>            query_future;       // querying from sqlite
+    Package_map                         packages;
+#else 
+    std::future<Query_result_node>      query_future;       // querying from sqlite
+    Query_result_node                   root_node;
+#endif
+    bool                                acquired = false;   // TODO: replace with timestamp ?
+    std::future<void>                   refresh_future;     // re-querying from Conan
 };
 
 struct Package_tree  {
-    std::map<char, Filtered_package_list>  letters;
+    std::map<char, Filtered_packages>  letters;
     Package_tree() {
         for (auto letter = 'A'; letter <= 'Z'; letter++)
-            letters[letter] = Filtered_package_list{};
+            letters[letter] = Filtered_packages{};
     }
 };
 
+
+static void show_query_result_node(const Query_result_node& node)
+{
+    if (node.index() == 0) {
+        auto& group = std::get<0>(node);
+        for (auto it: group) {
+            auto name = it.first.empty() ? "(none)" : it.first.c_str();
+            if (ImGui::TreeNode(name)) {
+                show_query_result_node(it.second);
+                ImGui::TreePop();
+            }
+        }
+    }
+    else {
+        auto& rows = std::get<1>(node);
+        for (auto row: rows) {
+            for (auto col: row) {
+                ImGui::TextUnformatted(col.c_str());
+                ImGui::SameLine();
+            }
+            ImGui::NewLine();
+        }
+    }
+}
 
 int main(int, char **)
 {
@@ -36,8 +68,6 @@ int main(int, char **)
     auto tree = Package_tree{};
 
     imgui_init("Conan GUI");
-
-    //(void) initial_requeue.get();
 
     while (imgui_continue()) {
     
@@ -69,8 +99,23 @@ int main(int, char **)
                     }
                     if (!sublist.acquired) {
                         if (!sublist.query_future.valid()) {
-                            sublist.query_future = std::async(std::launch::async, [=, &database]() { 
-                                return database.get_package_list(std::string{letter}); } );
+                            sublist.query_future = std::async(std::launch::async, [=, &database]() {
+                                auto where_clause = fmt::format("name like '{0}%'", letter);
+                                auto node = database.get_tree(
+                                    "packages2 LEFT OUTER JOIN pkg_info ON pkg_info.pkg_id = packages2.id", 
+                                    { 
+                                        "name", 
+                                        "packages2.remote", 
+                                        "user", "channel",
+                                        "version",
+                                    }, {
+                                        "description",
+                                        "pkg_id"
+                                    }, 
+                                    where_clause
+                                );
+                                return node;
+                            });
                         }
                         using namespace std::chrono_literals;
                         auto result = sublist.query_future.wait_for(0s);
@@ -78,19 +123,12 @@ int main(int, char **)
                             ImGui::TextUnformatted("(Querying...)");
                         }
                         else if (result == std::future_status::ready) {
-                            sublist.packages = sublist.query_future.get();
+                            sublist.root_node = sublist.query_future.get();
                             sublist.acquired = true;
                         }
                     }
                     if (sublist.acquired) {
-                        if (sublist.packages.empty())
-                            ImGui::TextUnformatted("(No packages)");
-                        else
-                            for (const auto& package: sublist.packages) {
-                                ImGui::Selectable(package.name.c_str());
-                                ImGui::SameLine();
-                                ImGui::TextUnformatted(package.repository.c_str());
-                            }
+                        show_query_result_node(sublist.root_node);
                     }
                     ImGui::TreePop();
                 }
