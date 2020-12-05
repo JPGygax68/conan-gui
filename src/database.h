@@ -84,7 +84,8 @@ namespace Conan {
         auto get_tree(
             std::string_view table,
             std::initializer_list<std::string_view> group_by_cols,
-            std::initializer_list<std::string_view> data_cols, std::string where_clause
+            std::initializer_list<std::string_view> data_cols, 
+            std::string where_clause
         ) -> Query_result_node;
 
     private:

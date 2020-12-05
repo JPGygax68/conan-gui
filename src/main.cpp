@@ -1,6 +1,7 @@
 #include <iostream>
 #include <cstdio>
 #include <map>
+#include <cassert>
 #include <imgui.h>
 #include <fmt/core.h>
 #include "./database.h"
@@ -33,26 +34,29 @@ struct Package_tree  {
 };
 
 
-static void show_query_result_node(const Query_result_node& node)
-{
-    if (node.index() == 0) {
-        auto& group = std::get<0>(node);
-        for (auto it: group) {
-            auto name = it.first.empty() ? "(none)" : it.first.c_str();
-            if (ImGui::TreeNode(name)) {
-                show_query_result_node(it.second);
-                ImGui::TreePop();
-            }
+static void show_query_result_node(
+    const Query_result_node& node,
+    size_t group_levels,
+    std::function<void(const Column_values&, int)> row_presenter
+) {
+    if (group_levels == 0) {
+        assert(node.index() == 1);
+        auto& rows = std::get<1>(node);
+        for (auto i = 0U; i < rows.size(); i++) {
+            auto& row = rows[i];
+            row_presenter(row, i);
+            i++;
         }
     }
     else {
-        auto& rows = std::get<1>(node);
-        for (auto row: rows) {
-            for (auto col: row) {
-                ImGui::TextUnformatted(col.c_str());
-                ImGui::SameLine();
+        assert(node.index() == 0);
+        auto& group = std::get<0>(node);
+        for (auto& it: group) {
+            auto name = it.first.empty() ? "(none)" : it.first.c_str();
+            if (ImGui::TreeNode(name)) {
+                show_query_result_node(it.second, group_levels - 1, row_presenter);
+                ImGui::TreePop();
             }
-            ImGui::NewLine();
         }
     }
 }
@@ -103,15 +107,8 @@ int main(int, char **)
                                 auto where_clause = fmt::format("name like '{0}%'", letter);
                                 auto node = database.get_tree(
                                     "packages2 LEFT OUTER JOIN pkg_info ON pkg_info.pkg_id = packages2.id", 
-                                    { 
-                                        "name", 
-                                        "packages2.remote", 
-                                        "user", "channel",
-                                        "version",
-                                    }, {
-                                        "description",
-                                        "pkg_id"
-                                    }, 
+                                    { "name", "packages2.remote", "user", "channel", "version" },
+                                    { "description", "pkg_id", "name", "version", "user", "channel" }, 
                                     where_clause
                                 );
                                 return node;
@@ -128,7 +125,14 @@ int main(int, char **)
                         }
                     }
                     if (sublist.acquired) {
-                        show_query_result_node(sublist.root_node);
+                        show_query_result_node(sublist.root_node, 4, [&](const Column_values& row, int ridx) {
+                            ImGui::AlignTextToFramePadding();
+                            ImGui::TextUnformatted(row[0].c_str());
+                            ImGui::SameLine();
+                            if (ImGui::Button("Get Info")) {
+                                // repo_reader.get_package_info(row[1], row[2], row[3], row[4]);
+                            }
+                        });
                     }
                     ImGui::TreePop();
                 }

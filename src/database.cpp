@@ -270,7 +270,8 @@ namespace Conan {
     auto Database::get_tree(
         std::string_view table,
         std::initializer_list<std::string_view> group_by_cols,
-        std::initializer_list<std::string_view> data_cols, std::string where_clause = ""
+        std::initializer_list<std::string_view> data_cols, 
+        std::string where_clause
     ) -> Query_result_node
     {
         using namespace std::string_literals;
@@ -280,7 +281,7 @@ namespace Conan {
 
         std::string statement = "select "s + group_col_list + ", " + data_col_list
             + " from " + std::string{table}
-            + (!where_clause.empty() ? " where "s + std::string{where_clause} : ""s)
+            + (!where_clause.empty() ? " where "s + where_clause : ""s)
             + " order by " + group_col_list // TODO: not necessary
             ;
 
@@ -298,7 +299,7 @@ namespace Conan {
                     auto& row_packet = std::get<1>(*node);
                     auto row = Column_values{};
                     for (auto j = 0U; (i + j) < col_count; j++) {
-                        const char* value = col_values[i + j];
+                        auto value = col_values[i + j];
                         row.push_back(value ? value : "");
                     }
                     row_packet.push_back(row);
