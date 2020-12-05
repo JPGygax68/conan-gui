@@ -72,6 +72,40 @@ namespace Conan {
         }
     }
 
+    auto Repository_reader::get_info(std::string_view remote, std::string_view package, std::string_view version, std::string_view user, std::string_view channel) -> Package_info
+    {
+        std::string specifier = fmt::format("{0}/{1}", package, version);
+        if (!user.empty()) specifier += fmt::format("@{0}/{1}", user, channel);
+            
+        auto file_ptr = _popen(fmt::format("conan info -r={0} {1}", remote, specifier).c_str(), "r");
+        if (!file_ptr) throw std::system_error(errno, std::generic_category());
+
+        auto re = std::regex("^[ \t]+([^:]+):[ \t]*(.*)$");
+
+        Package_info info;
+
+        while (!feof(file_ptr)) {
+            char buffer[1024];
+            if (fgets(buffer, sizeof(buffer), file_ptr)) {
+                std::string input = buffer;
+                input.erase(std::remove(input.begin(), input.end(), '\n'), input.end());
+                std::cout << input << std::endl;
+                std::smatch m;
+                if (std::regex_match(input, m, re)) {
+                    std::cout << m[1] << ": " << m[2] << std::endl;
+                    if (m[1] == "Description") info.description = m[2];
+                }
+                else {
+                    std::cerr << "***FAILED to parse info line \"" << input << "\"" << std::endl;
+                }
+            }
+        }
+
+        fclose(file_ptr);
+
+        return info;
+    }
+
     [[deprecated]]
     void Repository_reader::reader_func()
     {

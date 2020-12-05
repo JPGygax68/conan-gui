@@ -2,6 +2,7 @@
 #include <cstdio>
 #include <map>
 #include <cassert>
+#include <array>
 #include <imgui.h>
 #include <fmt/core.h>
 #include "./database.h"
@@ -11,16 +12,21 @@
 
 using namespace Conan;
 
-using Package_map = std::map<std::string, Package>;         // { remote, name}  -> package contents
+// struct Package_info_async {
+//     std::future<Package_info>   future;
+//     bool                        acquired = false;
+//     Package_info                value;
+// };
+
+using Package_info_async = async_data<Package_info>;
+using Package_group_node = Query_result_node<Package_info_async>;
+using Packages_root = Package_group_node;
+
+using Package_row = Row_content<Package_info_async>;
 
 struct Filtered_packages {
-#ifdef OLD_CODE
-    std::future<Package_map>            query_future;       // querying from sqlite
-    Package_map                         packages;
-#else 
-    std::future<Query_result_node>      query_future;       // querying from sqlite
-    Query_result_node                   root_node;
-#endif
+    std::future<Packages_root>          packages_future;    // querying from sqlite
+    Packages_root                       packages_root;
     bool                                acquired = false;   // TODO: replace with timestamp ?
     std::future<void>                   refresh_future;     // re-querying from Conan
 };
@@ -35,9 +41,9 @@ struct Package_tree  {
 
 
 static void show_query_result_node(
-    const Query_result_node& node,
+    Package_group_node& node,
     size_t group_levels,
-    std::function<void(const Column_values&, int)> row_presenter
+    std::function<void(Package_row& row, int)> row_presenter
 ) {
     if (group_levels == 0) {
         assert(node.index() == 1);
@@ -60,6 +66,7 @@ static void show_query_result_node(
         }
     }
 }
+
 
 int main(int, char **)
 {
@@ -102,35 +109,53 @@ int main(int, char **)
                         }
                     }
                     if (!sublist.acquired) {
-                        if (!sublist.query_future.valid()) {
-                            sublist.query_future = std::async(std::launch::async, [=, &database]() {
-                                auto where_clause = fmt::format("name like '{0}%'", letter);
-                                auto node = database.get_tree(
+                        if (!sublist.packages_future.valid()) {
+                            sublist.packages_future = std::async(std::launch::async, [=, &database]() {
+                                auto node = database.get_tree<Package_info_async>(
                                     "packages2 LEFT OUTER JOIN pkg_info ON pkg_info.pkg_id = packages2.id", 
-                                    { "name", "packages2.remote", "user", "channel", "version" },
-                                    { "description", "pkg_id", "name", "version", "user", "channel" }, 
-                                    where_clause
+                                    { "name", "packages2.remote", "user", "channel" },
+                                    { "packages2.id, packages2.remote, name, version, user, channel, description" }, 
+                                    fmt::format("name like '{0}%'", std::string{letter})
                                 );
                                 return node;
                             });
                         }
                         using namespace std::chrono_literals;
-                        auto result = sublist.query_future.wait_for(0s);
+                        auto result = sublist.packages_future.wait_for(0s);
                         if (result == std::future_status::timeout) {
                             ImGui::TextUnformatted("(Querying...)");
                         }
                         else if (result == std::future_status::ready) {
-                            sublist.root_node = sublist.query_future.get();
+                            sublist.packages_root = sublist.packages_future.get();
                             sublist.acquired = true;
                         }
                     }
                     if (sublist.acquired) {
-                        show_query_result_node(sublist.root_node, 4, [&](const Column_values& row, int ridx) {
-                            ImGui::AlignTextToFramePadding();
-                            ImGui::TextUnformatted(row[0].c_str());
-                            ImGui::SameLine();
-                            if (ImGui::Button("Get Info")) {
-                                // repo_reader.get_package_info(row[1], row[2], row[3], row[4]);
+                        show_query_result_node(sublist.packages_root, 4, [&](Row_content<Package_info_async>& row, int ridx) {
+                            // ImGui::AlignTextToFramePadding();
+                            ImGui::TextUnformatted(row[3].c_str());
+                            if (!row[6].empty()) {
+                                ImGui::SameLine();
+                                ImGui::TextWrapped("%s", row[6].c_str());
+                            }
+                            else {
+                                if (row.cargo.ready()) {
+                                    auto description = row.cargo.value().description;
+                                    database.set_package_description(row[0], row.cargo.value().description);
+                                    if (description.empty()) description = "(Failed to obtain package info)"; // TODO: this is a stopgap, need better handling
+                                    row[6] = description;
+                                }
+                                else {
+                                    if (row.cargo.busy()) {
+                                        ImGui::SameLine();
+                                        ImGui::TextUnformatted("(Querying...)");
+                                    }
+                                    else {
+                                        row.cargo.obtain([&]() {
+                                            return repo_reader.get_info(row[1], row[2], row[3], row[4], row[5]);
+                                        });
+                                    }
+                                }
                             }
                         });
                     }

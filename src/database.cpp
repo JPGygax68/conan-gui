@@ -4,22 +4,20 @@
 #include <stdexcept>
 #include <filesystem>
 #include <algorithm>
-#include <numeric>
 #include <concepts>
 #include <fmt/core.h>
 
 #include "./database.h"
 
 
-// Utilities (TODO: move?)
-
-template <typename Seq> // requires sequence_of_convertibles_to_string<Seq>
-auto join_strings(Seq strings, std::string_view separator = ",") -> std::string
-{
-    return std::accumulate(strings.begin(), strings.end(), std::string(),
-        [=](auto a, auto b) { return std::string{ a } + std::string{a.length() > 0 ? separator : ""} + std::string{ b }; });
+std::string replace_string(std::string subject, const std::string& search, const std::string& replace) {
+    size_t pos = 0;
+    while ((pos = subject.find(search, pos)) != std::string::npos) {
+        subject.replace(pos, search.length(), replace);
+        pos += replace.length();
+    }
+    return subject;
 }
-
 
 namespace Conan {
     
@@ -116,11 +114,13 @@ namespace Conan {
         if (version <= 5) 
             exec("create unique index if not exists packages2_unique on packages2(remote, name, version, user, channel)");
 
+        if (version == 7 || version == 8) {
+            drop_table("pkg_info");
+        }
         exec(R"(
             create table if not exists pkg_info (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
                 pkg_id INTEGER, 
-                recipe_id STRING NOT NULL,
+                recipe_id,
                 remote STRING,
                 url STRING,
                 license STRING,
@@ -131,8 +131,14 @@ namespace Conan {
                 FOREIGN KEY (pkg_id) REFERENCES packages2(id)
             )
         )", "trying to create pkg_info table");
+        if (version == 8) {
+            db_err = sqlite3_exec(db_handle, R"(
+                create unique index if not exists pkg_info_pkg_id on pkg_info (pkg_id);
+            )", nullptr, nullptr, &errmsg);
+            if (db_err != 0) throw_sqlite_error(db_err, "trying to create index pkg_info_pkg_id on pkg_info table");
+        }
 
-        exec("pragma user_version = 7;", "trying to set database version");
+        exec("pragma user_version = 9;", "trying to set database version");
     }
 
     Database::~Database()
@@ -184,9 +190,22 @@ namespace Conan {
         return list;
     }
 
-    auto Database::get_package(std::string_view remote, std::string_view pkg_name) -> Package
+    // TODO: replace with setter that sets all important fields
+    void Database::set_package_description(std::string_view id, std::string_view description)
     {
-        Package pkg = { .remote = std::string{remote} };
+        auto statement = fmt::format(R"(
+            insert into pkg_info (pkg_id, description, last_poll) values('{0}', '{1}', datetime('now'))
+            on conflict (pkg_id) do update set pkg_id='{0}', description='{1}', last_poll=datetime('now');
+        )", id, escape_single_quotes(description));
+
+        exec(statement.c_str(), "trying to upsert package_description into pkg_info");
+    }
+
+#ifdef OLD_CODE
+
+    auto Database::get_package(std::string_view remote, std::string_view pkg_name) -> Package_row
+    {
+        Package_row pkg = { .remote = std::string{remote} };
 
         select(
             fmt::format("select user, channel, version from packages2 where remote='{0}' and name='{1}'", 
@@ -201,6 +220,8 @@ namespace Conan {
 
         return pkg;
     }
+
+#endif
 
     auto Database::query_single_row(const char *query, const char *context) -> std::vector<std::string>
     {
@@ -267,53 +288,13 @@ namespace Conan {
         exec(fmt::format("drop table if exists {0}", name).c_str(), fmt::format("trying to drop table \"{0}\"", name));
     }
 
-    auto Database::get_tree(
-        std::string_view table,
-        std::initializer_list<std::string_view> group_by_cols,
-        std::initializer_list<std::string_view> data_cols, 
-        std::string where_clause
-    ) -> Query_result_node
+    auto Database::escape_single_quotes(std::string_view s) -> std::string
     {
-        using namespace std::string_literals;
-
-        auto group_col_list = join_strings(group_by_cols);
-        auto data_col_list = join_strings(data_cols);
-
-        std::string statement = "select "s + group_col_list + ", " + data_col_list
-            + " from " + std::string{table}
-            + (!where_clause.empty() ? " where "s + where_clause : ""s)
-            + " order by " + group_col_list // TODO: not necessary
-            ;
-
-        Query_result_node root;
-
-        select(statement.c_str(), [&](int col_count, const char* const col_values[], const char* const col_names[]) -> int {
-            auto i = 0U;
-            auto node = &root;
-            for (; i < group_by_cols.size(); i ++) {
-                const auto& key = col_values[i];
-                // Last grouping column ?
-                if (i == group_by_cols.size() -1) {
-                    if (node->index() != 1) 
-                        *node = Row_packet_node{};
-                    auto& row_packet = std::get<1>(*node);
-                    auto row = Column_values{};
-                    for (auto j = 0U; (i + j) < col_count; j++) {
-                        auto value = col_values[i + j];
-                        row.push_back(value ? value : "");
-                    }
-                    row_packet.push_back(row);
-                }
-                else {
-                    if (node->index() == std::variant_npos) 
-                        *node = Grouping_node{};
-                    node = &std::get<0>(*node)[key ? key : ""];
-                }
-            }
-            return 0;
-        });
-
-        return root;
+        std::string result;
+        for (auto ch: s) {
+            if (ch == '\'') result += "''"; else result += ch;
+        }
+        return result;
     }
 
 } // ns Conans
