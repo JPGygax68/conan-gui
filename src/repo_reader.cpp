@@ -50,14 +50,14 @@ namespace Conan {
     void Repository_reader::queue_repository(std::string_view repo)
     {
         for (char letter = 'A'; letter <= 'Z'; letter ++) {
-            filtered_read(repo, std::string{letter});
-            filtered_read(repo, std::string{(char)(letter + 'a' - 'A')});
+            filtered_read(repo, fmt::format("{}*", letter));
+            filtered_read(repo, fmt::format("{}*", letter + 'a' - 'A'));
         }
     }
 
     void Repository_reader::filtered_read(std::string_view remote, std::string_view name_filter)
     {
-        get_package_list(remote, name_filter);
+        update_package_list(remote, name_filter);
     }
 
     void Repository_reader::read_letter_all_repositories(char first_letter)
@@ -66,18 +66,23 @@ namespace Conan {
 
         auto& remotes = remotes_ad.get();
         for (auto& remote: remotes) {
-            filtered_read(remote, {&first_letter, 1});
-            char letter_lc = first_letter + 'a' - 'A';
-            filtered_read(remote, {&letter_lc, 1});
+            filtered_read(remote, fmt::format("{}*", first_letter));
+            filtered_read(remote, fmt::format("{}*", first_letter + 'a' - 'A'));
         }
     }
 
-    auto Repository_reader::get_info(std::string_view remote, std::string_view package, std::string_view version, std::string_view user, std::string_view channel) -> Package_info
+    auto Repository_reader::get_info(
+        std::string_view remote, 
+        std::string_view package, std::string_view version, 
+        std::string_view user, std::string_view channel
+    ) -> Package_info
     {
-        std::string specifier = fmt::format("{0}/{1}", package, version);
-        if (!user.empty()) specifier += fmt::format("@{0}/{1}", user, channel);
+        std::string specifier = fmt::format("{0}/{1}@", package, version);
+        if (!user.empty()) specifier += fmt::format("{0}/{1}", user, channel);
             
-        auto file_ptr = _popen(fmt::format("conan info -r={0} {1}", remote, specifier).c_str(), "r");
+        auto cmd = fmt::format("conan info -r {0} {1}", remote, specifier);
+        std::cout << "GET INFO command: " << cmd << std::endl;
+        auto file_ptr = _popen(cmd.c_str(), "r");
         if (!file_ptr) throw std::system_error(errno, std::generic_category());
 
         auto re = std::regex("^[ \t]+([^:]+):[ \t]*(.*)$");
@@ -117,7 +122,7 @@ namespace Conan {
 
             std::cout << "Searching remote " << task.repository << ", letter " << task.letter << std::endl;
 
-            get_package_list(task.repository, std::string{task.letter});
+            update_package_list(task.repository, fmt::format("{}*", task.letter));
 
             lock.lock();
             task_queue.pop();
@@ -141,12 +146,11 @@ namespace Conan {
         }
     }
 
-    void Repository_reader::get_package_list(std::string_view remote, std::string_view name_filter) 
+    void Repository_reader::update_package_list(std::string_view remote, std::string_view name_filter) 
     {
         auto file_ptr = _popen(fmt::format("conan search -r {} {}* --raw", remote, name_filter).c_str(), "r");
         if (!file_ptr) throw std::system_error(errno, std::generic_category());
 
-        // auto& db = Database::instance();
         Database db;
 
         auto re = std::regex("([^/]+)/([^@]+)(?:@([^/]+)/(.+))?");

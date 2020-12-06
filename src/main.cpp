@@ -75,7 +75,7 @@ int main(int, char **)
 
     std::future<void> queued_op;
 
-    // auto package_list = database.get_package_list();
+    // auto package_list = database.update_package_list();
     auto tree = Package_tree{};
 
     imgui_init("Conan GUI");

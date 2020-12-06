@@ -74,7 +74,7 @@ namespace Conan {
         void stop_reader_thread();
         void reader_func();
 
-        void get_package_list(std::string_view remote, std::string_view name_filter);
+        void update_package_list(std::string_view remote, std::string_view name_filter);
 
         Database&                   database;
 
