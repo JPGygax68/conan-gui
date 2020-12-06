@@ -165,11 +165,13 @@ namespace Conan {
             auto i = 0U;
             Query_result_node<Cargo> *node = &root;
             for (; i < group_by_cols.size(); i++) {
-                const auto& key = col_values[i];
+                const std::string key = col_values[i];
+                if (key.empty())
+                    continue;
                 // Last grouping column ?
-                if (node->index() == std::variant_npos)
+                if (node->index() != 0)
                     *node = Grouping_node<Cargo>{};
-                node = &std::get<0>(*node)[key ? key : ""];
+                node = &std::get<0>(*node)[key];
             }
             if (node->index() != 1)
                 *node = Row_packet_node<Cargo>{};

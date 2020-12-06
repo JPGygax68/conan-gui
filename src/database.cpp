@@ -201,28 +201,6 @@ namespace Conan {
         exec(statement.c_str(), "trying to upsert package_description into pkg_info");
     }
 
-#ifdef OLD_CODE
-
-    auto Database::get_package(std::string_view remote, std::string_view pkg_name) -> Package_row
-    {
-        Package_row pkg = { .remote = std::string{remote} };
-
-        select(
-            fmt::format("select user, channel, version from packages2 where remote='{0}' and name='{1}'", 
-                remote, pkg_name).c_str(), 
-            [&](int col_count, const char * const col_values[], const char * const col_names[]) -> int {
-                auto& user = pkg.users[col_values[0]];
-                auto& channel = user.channels[col_values[1]];
-                auto& version = channel.versions[col_values[2]];
-                return 0;
-            }
-        );
-
-        return pkg;
-    }
-
-#endif
-
     auto Database::query_single_row(const char *query, const char *context) -> std::vector<std::string>
     {
         char *errmsg;

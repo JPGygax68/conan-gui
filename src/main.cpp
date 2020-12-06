@@ -45,8 +45,8 @@ static void show_query_result_node(
     size_t group_levels,
     std::function<void(Package_row& row, int)> row_presenter
 ) {
-    if (group_levels == 0) {
-        assert(node.index() == 1);
+    if (node.index() == 1 /* group_levels == 0 */) {
+        // assert(node.index() == 1);
         auto& rows = std::get<1>(node);
         for (auto i = 0U; i < rows.size(); i++) {
             auto& row = rows[i];
