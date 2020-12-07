@@ -104,7 +104,8 @@ namespace Conan {
             std::string_view table,
             std::initializer_list<std::string_view> group_by_cols,
             std::initializer_list<std::string_view> data_cols, 
-            std::string where_clause
+            std::string where_clause,
+            std::string order_by_clause = ""
         ) -> Query_result_node<Cargo>;
 
     private:
@@ -146,7 +147,8 @@ namespace Conan {
         std::string_view table, 
         std::initializer_list<std::string_view> group_by_cols, 
         std::initializer_list<std::string_view> data_cols, 
-        std::string where_clause
+        std::string where_clause,
+        std::string order_by_clause
     ) -> Query_result_node<Cargo>
     {
         using namespace std::string_literals;
@@ -157,7 +159,7 @@ namespace Conan {
         std::string statement = "select "s + group_col_list + ", " + data_col_list
             + " from " + std::string{ table }
             + (!where_clause.empty() ? " where "s + where_clause : ""s)
-            + " order by " + group_col_list // TODO: not necessary
+            + (!order_by_clause.empty() ? " order by "s + order_by_clause : ""s)
             ;
 
         Query_result_node<Cargo> root;

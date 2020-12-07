@@ -116,7 +116,8 @@ int main(int, char **)
                                     "packages2 LEFT OUTER JOIN pkg_info ON pkg_info.pkg_id = packages2.id", 
                                     { "name", "packages2.remote", "user", "channel" },
                                     { "packages2.id, packages2.remote, name, version, user, channel, description" }, 
-                                    fmt::format("name like '{0}%'", std::string{letter})
+                                    fmt::format("name like '{0}%'", std::string{letter}),
+                                    "name, packages2.remote, user, channel, version DESC" // TODO: DESC does not work when semver is used!
                                 );
                                 return node;
                             });
@@ -149,7 +150,7 @@ int main(int, char **)
                                     if (ImGui::Button("Re-query")) {
                                         std::cout << "Re-querying..." << std::endl;
                                         description = "";
-                                        row.cargo.reset(); // TODO: DOES NOT WORK
+                                        row.cargo.reset();
                                     }
                                     ImGui::SameLine();
                                     ImGui::TextWrapped("%s", description.c_str());
