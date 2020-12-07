@@ -5,6 +5,7 @@
 #include <filesystem>
 #include <algorithm>
 #include <concepts>
+#include <regex>
 #include <fmt/core.h>
 
 #include "./database.h"
@@ -108,6 +109,9 @@ namespace Conan {
                 version STRING NOT NULL,
                 user STRING,
                 channel STRING,
+                ver_major INTEGER,
+                ver_minor INTEGER,
+                ver_patch INTEGER,
                 last_poll DATETIME
             )
         )", "trying to create packages2 table");
@@ -138,7 +142,33 @@ namespace Conan {
             if (db_err != 0) throw_sqlite_error(db_err, "trying to create index pkg_info_pkg_id on pkg_info table");
         }
 
-        exec("pragma user_version = 9;", "trying to set database version");
+        if (version == 9) {
+            exec(R"(
+                alter table packages add column ver_major INTEGER;
+                alter table packages add column ver_minor INTEGER;
+                alter table packages add column ver_patch INTEGER;
+            )", "trying to add SEMVER columns to table \"packages2\"");
+        }
+
+        if (version == 10 || version == 11) {
+            select("select id, version from packages2", [&](int col_count, const char * const col_values[], const char * const col_names[]) -> int {
+                static const auto re = std::regex("^(\\d+)\\.(\\d+)\\.(\\d+)$");
+                std::smatch m;
+                std::string value = col_values[1];
+                if (std::regex_match(value, m, re)) {
+                    auto major = std::stoi(m[1]), minor = std::stoi(m[2]), patch = std::stoi(m[3]);
+                    std::cout << "SEMVER: " << major << "." << minor << "." << patch << std::endl;
+                    // TODO: very poor example, use prepared statements and parameter binding!
+                    // TODO: could computed fields be used instead ?
+                    exec(fmt::format("update packages2 set ver_major={1}, ver_minor={2}, ver_patch={3} where id={0}", col_values[0], major, minor, patch).c_str(),
+                        "trying to set SEMVER values in \"packages2\""
+                    );
+                }
+                return 0;
+            });
+        }
+
+        exec("pragma user_version = 12;", "trying to set database version");
     }
 
     Database::~Database()
@@ -164,9 +194,18 @@ namespace Conan {
 
     void Database::upsert_package2(std::string_view remote, std::string_view name, std::string_view version, std::string_view user, std::string_view channel)
     {
+        auto re = std::regex("^(\\d+)\\.(\\d+)\\.(\\d+)$");
+        uint32_t major = 0, minor = 0, patch = 0;
+        std::smatch m;
+        std::string version_s{version};
+        if (std::regex_match(version_s, m, re)) {
+            major = std::stoi(m[1]), minor = std::stoi(m[2]), patch = std::stoi(m[3]);
+            std::cout << "SEMVER: " << major << "." << minor << "." << patch << std::endl;
+        }
+
         auto statement = fmt::format(R"(
-            insert into packages2 (remote, name, version, user, channel, last_poll) 
-                values('{0}', '{1}', '{2}', '{3}', '{4}', datetime('now'))
+            insert into packages2 (remote, name, version, user, channel, ver_major, ver_minor, ver_path, last_poll) 
+                values('{0}', '{1}', '{2}', '{3}', '{4}', {5}, {6}, {7}, datetime('now'))
             on conflict (remote, name, version, user, channel) do update set last_poll=datetime('now');
         )", remote, name, version, user, channel);
 

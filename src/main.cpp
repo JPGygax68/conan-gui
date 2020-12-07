@@ -117,7 +117,7 @@ int main(int, char **)
                                     { "name", "packages2.remote", "user", "channel" },
                                     { "packages2.id, packages2.remote, name, version, user, channel, description" }, 
                                     fmt::format("name like '{0}%'", std::string{letter}),
-                                    "name, packages2.remote, user, channel, version DESC" // TODO: DESC does not work when semver is used!
+                                    "name, packages2.remote, user, channel, ver_major DESC, ver_minor DESC, ver_patch DESC, version DESC"
                                 );
                                 return node;
                             });
