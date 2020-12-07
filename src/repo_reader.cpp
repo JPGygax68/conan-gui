@@ -80,12 +80,14 @@ namespace Conan {
         std::string specifier = fmt::format("{0}/{1}@", package, version);
         if (!user.empty()) specifier += fmt::format("{0}/{1}", user, channel);
             
-        auto cmd = fmt::format("conan info -r {0} {1}", remote, specifier);
-        std::cout << "GET INFO command: " << cmd << std::endl;
+        // auto cmd = fmt::format("conan info -r {0} {1}", remote, specifier);
+        auto cmd = fmt::format("conan inspect -r {0} {1}", remote, specifier);
+        std::cout << "INSPECT command: " << cmd << std::endl;
         auto file_ptr = _popen(cmd.c_str(), "r");
         if (!file_ptr) throw std::system_error(errno, std::generic_category());
 
-        auto re = std::regex("^[ \t]+([^:]+):[ \t]*(.*)$");
+        // auto re = std::regex("^[ \t]+([^:]+):[ \t]*(.*)$");
+        auto re = std::regex("^([^:]+):[ \t]*(.*)$");
 
         Package_info info;
 
@@ -97,8 +99,8 @@ namespace Conan {
                 std::cout << input << std::endl;
                 std::smatch m;
                 if (std::regex_match(input, m, re)) {
-                    std::cout << m[1] << ": " << m[2] << std::endl;
-                    if (m[1] == "Description") info.description = m[2];
+                    // if (m[1] == "Description") info.description = m[2];
+                    if (m[1] == "description") info.description = m[2];
                 }
                 else {
                     std::cerr << "***FAILED to parse info line \"" << input << "\"" << std::endl;

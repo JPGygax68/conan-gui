@@ -40,6 +40,10 @@ struct async_data {
         return _result;
     }
 
+    void reset() {
+        _future = std::future<T>{};
+    }
+
 private:
 
     bool _done = false;

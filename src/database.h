@@ -29,6 +29,7 @@ namespace Conan {
     template <typename Cargo>
     class Row_content: public std::vector<std::string> {
     public:
+        auto& as_vector() { return *static_cast<std::vector<std::string>*>(this); }
         Cargo cargo;
     };
     

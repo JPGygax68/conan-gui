@@ -3,6 +3,7 @@
 #include <map>
 #include <cassert>
 #include <array>
+#include <span>
 #include <imgui.h>
 #include <fmt/core.h>
 #include "./database.h"
@@ -132,31 +133,49 @@ int main(int, char **)
                     }
                     if (sublist.acquired) {
                         show_query_result_node(sublist.packages_root, 4, [&](Row_content<Package_info_async>& row, int ridx) {
-                            // ImGui::AlignTextToFramePadding();
-                            ImGui::TextUnformatted(row[3].c_str());
-                            if (!row[6].empty()) {
-                                ImGui::SameLine();
-                                ImGui::TextWrapped("%s", row[6].c_str());
-                            }
-                            else {
-                                if (row.cargo.ready()) {
-                                    auto description = row.cargo.value().description;
-                                    database.set_package_description(row[0], row.cargo.value().description);
-                                    if (description.empty()) description = "(Failed to obtain package info)"; // TODO: this is a stopgap, need better handling
-                                    row[6] = description;
+                            auto& id = row[0];
+                            auto& remote = row[1];
+                            auto& name = row[2];
+                            auto& version = row[3];
+                            auto& user = row[4];
+                            auto& channel = row[5];
+                            auto& description = row[6];
+                            ImGui::AlignTextToFramePadding();
+                            ImGui::TextUnformatted(version.c_str());
+                            ImGui::PushID(version.c_str());
+                            {
+                                if (!description.empty()) {
+                                    ImGui::SameLine();
+                                    if (ImGui::Button("Re-query")) {
+                                        std::cout << "Re-querying..." << std::endl;
+                                        description = "";
+                                        row.cargo.reset(); // TODO: DOES NOT WORK
+                                    }
+                                    ImGui::SameLine();
+                                    ImGui::TextWrapped("%s", description.c_str());
                                 }
-                                else {
-                                    if (row.cargo.busy()) {
-                                        ImGui::SameLine();
-                                        ImGui::TextUnformatted("(Querying...)");
+                                if (description.empty()) {
+                                    if (row.cargo.ready()) {
+                                        std::cout << "Obtained description: " << row.cargo.value().description << std::endl;
+                                        auto description = row.cargo.value().description;
+                                        database.set_package_description(row[0], row.cargo.value().description);
+                                        if (description.empty()) description = "(Failed to obtain package info)"; // TODO: this is a stopgap, need better handling
+                                        row[6] = description; // so we don't have to re-query
                                     }
                                     else {
-                                        row.cargo.obtain([&]() {
-                                            return repo_reader.get_info(row[1], row[2], row[3], row[4], row[5]);
-                                        });
+                                        if (row.cargo.busy()) {
+                                            ImGui::SameLine();
+                                            ImGui::TextUnformatted("(Querying...)");
+                                        }
+                                        else {
+                                            row.cargo.obtain([&]() {
+                                                return repo_reader.get_info(remote, name, version, user, channel);
+                                            });
+                                        }
                                     }
                                 }
                             }
+                            ImGui::PopID();
                         });
                     }
                     ImGui::TreePop();
