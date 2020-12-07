@@ -101,21 +101,39 @@ namespace Conan {
         )", nullptr, nullptr, &errmsg);
         if (db_err != 0) throw_sqlite_error(db_err, "trying to create packages table");
 
-        exec(R"(
-            create table if not exists packages2 (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                remote STRING NOT NULL,
-                name STRING NOT NULL,
-                version STRING NOT NULL,
-                user STRING,
-                channel STRING,
-                ver_major INTEGER,
-                ver_minor INTEGER,
-                ver_patch INTEGER,
-                last_poll DATETIME
-            )
-        )", "trying to create packages2 table");
-        if (version <= 5) 
+        if (version == 12) {
+            exec(R"(
+                BEGIN TRANSACTION;
+                CREATE TABLE packages2_backup AS SELECT id, remote, name, version, user, channel, last_poll FROM packages2;
+                DROP TABLE packages2;
+                CREATE TABLE packages2 (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    remote STRING NOT NULL,
+                    name STRING NOT NULL,
+                    version STRING NOT NULL,
+                    user STRING,
+                    channel STRING,
+                    last_poll DATETIME
+                );
+                INSERT INTO packages2 SELECT * FROM packages2_backup;
+                DROP TABLE packages2_backup;
+                COMMIT;
+            )", "trying to remove SEMVER fields from \"packages2\"");
+        }
+        else {
+            exec(R"(
+                create table if not exists packages2 (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    remote STRING NOT NULL,
+                    name STRING NOT NULL,
+                    version STRING NOT NULL,
+                    user STRING,
+                    channel STRING,
+                    last_poll DATETIME
+                )
+            )", "trying to create packages2 table");
+        }
+        if (version <= 5 || version == 12) 
             exec("create unique index if not exists packages2_unique on packages2(remote, name, version, user, channel)");
 
         if (version == 7 || version == 8) {
@@ -168,7 +186,42 @@ namespace Conan {
             });
         }
 
-        exec("pragma user_version = 12;", "trying to set database version");
+        sqlite3_create_function(
+            db_handle,
+            "SEMVER_PART", 2,
+            SQLITE_UTF8 | SQLITE_DETERMINISTIC | SQLITE_DIRECTONLY,
+            nullptr,
+            [](sqlite3_context* context, int argc, sqlite3_value** argv) {
+                // TODO: improve to support a fourth part (after either a dash or another dot)
+                static const auto re = std::regex("^(\\d+)\\.(\\d+)\\.(\\d+)$");
+                // auto& re = *static_cast<std::regex*>(sqlite3_user_data(context));
+                if (argc == 2) {
+                    std::smatch m;
+                    std::string version{ (const char*)sqlite3_value_text(argv[0]) };
+                    int index = sqlite3_value_int(argv[1]);
+                    if (!(index >= 1 && index <= 3)) {
+                        sqlite3_result_error(context, "The second parameter to SEMVER_PART() must be between 1 and 3", -1);
+                        return;
+                    }
+                    if (std::regex_match(version, m, re)) {
+                        sqlite3_result_int(context, std::stoi(m[index]));
+                        return;
+                    }
+                }
+                sqlite3_result_null(context);
+            },
+            nullptr, nullptr
+        );
+
+        // if (version == 12) {
+        //     exec(R"(
+        //         alter table packages add column semver_major INTEGER GENERATED ALWAYS AS SEMVER_PART(version, 1);
+        //         alter table packages add column semver_minor INTEGER GENERATED ALWAYS AS SEMVER_PART(version, 2);
+        //         alter table packages add column semver_patch INTEGER GENERATED ALWAYS AS SEMVER_PART(version, 3);
+        //     )", "trying to add computed SEMVER columns to table \"packages2\"");
+        // }
+
+        exec("pragma user_version = 13;", "trying to set database version");
     }
 
     Database::~Database()
@@ -194,18 +247,9 @@ namespace Conan {
 
     void Database::upsert_package2(std::string_view remote, std::string_view name, std::string_view version, std::string_view user, std::string_view channel)
     {
-        auto re = std::regex("^(\\d+)\\.(\\d+)\\.(\\d+)$");
-        uint32_t major = 0, minor = 0, patch = 0;
-        std::smatch m;
-        std::string version_s{version};
-        if (std::regex_match(version_s, m, re)) {
-            major = std::stoi(m[1]), minor = std::stoi(m[2]), patch = std::stoi(m[3]);
-            std::cout << "SEMVER: " << major << "." << minor << "." << patch << std::endl;
-        }
-
         auto statement = fmt::format(R"(
-            insert into packages2 (remote, name, version, user, channel, ver_major, ver_minor, ver_path, last_poll) 
-                values('{0}', '{1}', '{2}', '{3}', '{4}', {5}, {6}, {7}, datetime('now'))
+            insert into packages2 (remote, name, version, user, channel, last_poll) 
+                values('{0}', '{1}', '{2}', '{3}', '{4}', datetime('now'))
             on conflict (remote, name, version, user, channel) do update set last_poll=datetime('now');
         )", remote, name, version, user, channel);
 
