@@ -36,13 +36,6 @@ namespace Conan {
     template <typename Cargo>
     class Row_packet_node: public std::vector<Row_content<Cargo>> {};
     
-    // class Query_result_node: public std::variant<Grouping_node, Row_content> {
-    // public:
-    //     bool is_leaf() const { return index() == 1; }
-    //     auto child_group() -> Grouping_node& { return std::get<0>(*this); }
-    //     auto column_values() -> Row_content& { return std::get<1>(*this); }
-    // };
-
     // Conan-specific 
 
     struct Package_designator {
@@ -67,10 +60,14 @@ namespace Conan {
         std::map<std::string, Channel> channels;
     };
 
-    // struct Package_row {
-    //     std::string remote;
-    //     std::map<std::string, User> users;
-    // };
+    struct Package_info {
+        std::string description;
+        std::string license;
+        std::string provides;
+        std::string author;
+        std::string topics;
+        std::string creation_date;
+    };
 
 
     class Database {
@@ -94,6 +91,7 @@ namespace Conan {
         auto get_package_designators(std::string_view name_filter) -> Package_designators;
 
         void set_package_description(std::string_view id, std::string_view description);
+        void set_package_info(sqlite3_int64 pkg_id, const Package_info& info);
 
         // auto get_package(std::string_view remote, std::string_view pkg_name) -> Package_row;
 
@@ -120,7 +118,8 @@ namespace Conan {
         auto insert(std::string_view table, std::string_view columns, std::string_view values) -> int64_t;
         void drop_table(std::string_view name);
 
-        sqlite3     *db_handle = nullptr;
+        sqlite3         *db_handle = nullptr;
+        sqlite3_stmt    *stmt_upsert_package_description = nullptr;
     };
 
 } // ns Conan

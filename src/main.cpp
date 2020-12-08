@@ -134,7 +134,7 @@ int main(int, char **)
                     }
                     if (sublist.acquired) {
                         show_query_result_node(sublist.packages_root, 4, [&](Row_content<Package_info_async>& row, int ridx) {
-                            auto& id = row[0];
+                            int64_t id = std::stoll(row[0]);
                             auto& remote = row[1];
                             auto& name = row[2];
                             auto& version = row[3];
@@ -143,7 +143,7 @@ int main(int, char **)
                             auto& description = row[6];
                             ImGui::AlignTextToFramePadding();
                             auto x = ImGui::GetCursorPosX();
-                            ImGui::TextUnformatted(version.c_str());
+                            auto open = ImGui::TreeNode(version.c_str());
                             ImGui::SameLine();
                             ImGui::SetCursorPosX(x + imgui_default_font_size() * 8);
                             ImGui::PushID(version.c_str());
@@ -172,13 +172,14 @@ int main(int, char **)
                                         }
                                         else {
                                             row.cargo.obtain([&]() {
-                                                return repo_reader.get_info(remote, name, version, user, channel);
+                                                return repo_reader.get_info(remote, name, version, user, channel, id);
                                             });
                                         }
                                     }
                                 }
                             }
                             ImGui::PopID();
+                            if (open) ImGui::TreePop();
                         });
                     }
                     ImGui::TreePop();

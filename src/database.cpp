@@ -22,9 +22,10 @@ std::string replace_string(std::string subject, const std::string& search, const
 
 namespace Conan {
     
-    static void throw_sqlite_error(int category, const char *err_msg, std::string_view context = "") {
+    static void throw_sqlite_error(int category, const char *err_msg = nullptr, std::string_view context = "") {
         using namespace std::string_literals;
-        auto msg = fmt::format("SQLite error (category: {0}): {1}", sqlite3_errstr(category), err_msg);
+        auto msg = fmt::format("SQLite error (category: {0})", sqlite3_errstr(category));
+        if (err_msg) msg += ": "s + err_msg;
         if (!context.empty()) { msg += "; context: "; msg += context; }
         std::cerr << msg << std::endl;
         throw std::runtime_error(msg);
@@ -136,36 +137,46 @@ namespace Conan {
         if (version <= 5 || version == 12) 
             exec("create unique index if not exists packages2_unique on packages2(remote, name, version, user, channel)");
 
-        if (version == 7 || version == 8) {
-            drop_table("pkg_info");
-        }
-        exec(R"(
-            create table if not exists pkg_info (
-                pkg_id INTEGER, 
-                recipe_id,
-                remote STRING,
-                url STRING,
-                license STRING,
-                description STRING,
-                provides STRING,
-                creation_date DATETIME,
-                last_poll DATETIME,
-                FOREIGN KEY (pkg_id) REFERENCES packages2(id)
-            )
-        )", "trying to create pkg_info table");
-        if (version == 8) {
-            db_err = sqlite3_exec(db_handle, R"(
-                create unique index if not exists pkg_info_pkg_id on pkg_info (pkg_id);
-            )", nullptr, nullptr, &errmsg);
-            if (db_err != 0) throw_sqlite_error(db_err, "trying to create index pkg_info_pkg_id on pkg_info table");
-        }
-
         if (version == 9) {
             exec(R"(
                 alter table packages add column ver_major INTEGER;
                 alter table packages add column ver_minor INTEGER;
                 alter table packages add column ver_patch INTEGER;
             )", "trying to add SEMVER columns to table \"packages2\"");
+        }
+
+        if (version == 7 || version == 8) {
+            drop_table("pkg_info");
+        }
+        if (version == 13) {
+            exec(R"(
+                ALTER TABLE pkg_info ADD COLUMN author STRING;
+                ALTER TABLE pkg_info ADD COLUMN topics STRING;
+            )", "trying to add new fields to table \"pkg_info\"");
+        }
+        else {
+            exec(R"(
+                create table if not exists pkg_info (
+                    pkg_id INTEGER, 
+                    recipe_id,
+                    remote STRING,
+                    url STRING,
+                    license STRING,
+                    description STRING,
+                    provides STRING,
+                    author STRING,
+                    topics STRING,
+                    creation_date DATETIME,
+                    last_poll DATETIME,
+                    FOREIGN KEY (pkg_id) REFERENCES packages2(id)
+                )
+            )", "trying to create pkg_info table");
+        }
+        if (version == 8) {
+            db_err = sqlite3_exec(db_handle, R"(
+                create unique index if not exists pkg_info_pkg_id on pkg_info (pkg_id);
+            )", nullptr, nullptr, &errmsg);
+            if (db_err != 0) throw_sqlite_error(db_err, "trying to create index pkg_info_pkg_id on pkg_info table");
         }
 
         if (version == 10 || version == 11) {
@@ -213,15 +224,23 @@ namespace Conan {
             nullptr, nullptr
         );
 
-        // if (version == 12) {
-        //     exec(R"(
-        //         alter table packages add column semver_major INTEGER GENERATED ALWAYS AS SEMVER_PART(version, 1);
-        //         alter table packages add column semver_minor INTEGER GENERATED ALWAYS AS SEMVER_PART(version, 2);
-        //         alter table packages add column semver_patch INTEGER GENERATED ALWAYS AS SEMVER_PART(version, 3);
-        //     )", "trying to add computed SEMVER columns to table \"packages2\"");
-        // }
+        exec("pragma user_version = 14;", "trying to set database version");
 
-        exec("pragma user_version = 13;", "trying to set database version");
+        stmt_upsert_package_description = [&]() {
+            static const auto statement = R"(
+                insert into pkg_info 
+                    (pkg_id, description, license, provides, author, topics, last_poll) 
+                    values(:PKG_ID, :DESCRIPTION, :LICENSE, :PROVIDES, :AUTHOR, :TOPICS, datetime('now'))
+                on conflict (pkg_id) do update 
+                    set pkg_id=:PKG_ID, description=:DESCRIPTION, license=:LICENSE, author=:AUTHOR, topics=:TOPICS, last_poll=datetime('now');
+            )";
+            sqlite3_stmt *stmt = nullptr;
+            auto err = sqlite3_prepare_v2(db_handle, statement, -1, &stmt, nullptr);
+            if (err != SQLITE_OK) throw_sqlite_error(err, nullptr, "trying to prepare statement upsert_package_description");
+            return stmt;
+        }();
+
+
     }
 
     Database::~Database()
@@ -282,6 +301,21 @@ namespace Conan {
         )", id, escape_single_quotes(description));
 
         exec(statement.c_str(), "trying to upsert package_description into pkg_info");
+    }
+
+    void Database::set_package_info(sqlite3_int64 pkg_id, const Package_info& info)
+    {
+        // TODO (:PKG_ID, : DESCRIPTION, : LICENSE, : PROVIDES, : AUTHOR, : TOPICS, datetime('now'))
+        auto stmt = stmt_upsert_package_description;
+        int err = 0;
+        err = sqlite3_bind_int64(stmt, sqlite3_bind_parameter_index(stmt, "PKG_ID"     ), pkg_id);
+        err = sqlite3_bind_text (stmt, sqlite3_bind_parameter_index(stmt, "DESCRIPTION"), info.description.data(), info.description.size(), nullptr);
+        err = sqlite3_bind_text (stmt, sqlite3_bind_parameter_index(stmt, "LICENSE"    ), info.license    .data(), info.license    .size(), nullptr);
+        err = sqlite3_bind_text (stmt, sqlite3_bind_parameter_index(stmt, "PROVIDES"   ), info.provides   .data(), info.provides   .size(), nullptr);
+        err = sqlite3_bind_text (stmt, sqlite3_bind_parameter_index(stmt, "AUTHOR"     ), info.author     .data(), info.author     .size(), nullptr);
+        err = sqlite3_bind_text (stmt, sqlite3_bind_parameter_index(stmt, "TOPICS"     ), info.topics     .data(), info.topics     .size(), nullptr);
+        err = sqlite3_step(stmt);
+        if (err != SQLITE_DONE) throw_sqlite_error(err, nullptr, "trying to execute prepared statement upsert_package_info");
     }
 
     auto Database::query_single_row(const char *query, const char *context) -> std::vector<std::string>

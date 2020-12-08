@@ -74,7 +74,8 @@ namespace Conan {
     auto Repository_reader::get_info(
         std::string_view remote, 
         std::string_view package, std::string_view version, 
-        std::string_view user, std::string_view channel
+        std::string_view user, std::string_view channel,
+        int64_t pkg_id
     ) -> Package_info
     {
         std::string specifier = fmt::format("{0}/{1}@", package, version);
@@ -100,7 +101,11 @@ namespace Conan {
                 std::smatch m;
                 if (std::regex_match(input, m, re)) {
                     // if (m[1] == "Description") info.description = m[2];
-                    if (m[1] == "description") info.description = m[2];
+                    if      (m[1] == "description") info.description = m[2];
+                    else if (m[1] == "license"    ) info.license     = m[2];
+                    else if (m[1] == "provides"   ) info.provides    = m[2];
+                    else if (m[1] == "author"     ) info.author      = m[2];
+                    else if (m[1] == "topics"     ) info.topics      = m[2];
                 }
                 else {
                     std::cerr << "***FAILED to parse info line \"" << input << "\"" << std::endl;
@@ -109,6 +114,8 @@ namespace Conan {
         }
 
         fclose(file_ptr);
+
+        database.set_package_info(pkg_id, info);
 
         return info;
     }

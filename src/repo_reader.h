@@ -10,12 +10,6 @@
 
 namespace Conan {
 
-    struct Package_info {
-        std::string description;
-        // TODO: more fields
-    };
-
-
     class Repository_reader {
     public:
         
@@ -32,7 +26,8 @@ namespace Conan {
         void filtered_read(std::string_view repo, std::string_view name_filter);
         void read_letter_all_repositories(char first_letter);
 
-        auto get_info(std::string_view remote, std::string_view package, std::string_view version, std::string_view user, std::string_view channel) -> Package_info;
+        auto get_info(std::string_view remote, std::string_view package, std::string_view version, 
+            std::string_view user, std::string_view channel, int64_t pkg_id) -> Package_info;
 
     private:
         struct Task {
