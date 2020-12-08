@@ -117,7 +117,6 @@ int main(int, char **)
                                     { "name", "packages2.remote", "user", "channel" },
                                     { "packages2.id, packages2.remote, name, version, user, channel, description" }, 
                                     fmt::format("name like '{0}%'", std::string{letter}),
-                                    //"name, packages2.remote, user, channel, ver_major DESC, ver_minor DESC, ver_patch DESC, version DESC"
                                     "name, packages2.remote, user, channel, SEMVER_PART(version, 1) DESC, SEMVER_PART(version, 2) DESC, SEMVER_PART(version, 3) DESC, version DESC"
                                 );
                                 return node;
@@ -143,11 +142,13 @@ int main(int, char **)
                             auto& channel = row[5];
                             auto& description = row[6];
                             ImGui::AlignTextToFramePadding();
+                            auto x = ImGui::GetCursorPosX();
                             ImGui::TextUnformatted(version.c_str());
+                            ImGui::SameLine();
+                            ImGui::SetCursorPosX(x + imgui_default_font_size() * 8);
                             ImGui::PushID(version.c_str());
                             {
                                 if (!description.empty()) {
-                                    ImGui::SameLine();
                                     if (ImGui::Button("Re-query")) {
                                         std::cout << "Re-querying..." << std::endl;
                                         description = "";
@@ -163,10 +164,10 @@ int main(int, char **)
                                         database.set_package_description(row[0], row.cargo.value().description);
                                         if (description.empty()) description = "(Failed to obtain package info)"; // TODO: this is a stopgap, need better handling
                                         row[6] = description; // so we don't have to re-query
+                                        ImGui::NewLine();
                                     }
                                     else {
                                         if (row.cargo.busy()) {
-                                            ImGui::SameLine();
                                             ImGui::TextUnformatted("(Querying...)");
                                         }
                                         else {

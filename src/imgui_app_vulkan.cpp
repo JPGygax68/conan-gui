@@ -339,6 +339,9 @@ static void FramePresent(ImGui_ImplVulkanH_Window* wd)
 static SDL_Window* window = nullptr;
 static ImGui_ImplVulkanH_Window* wd = nullptr;
 
+static float default_font_size = 13.0f;
+static float scaling_factor = 1.0f;
+
 // Our state
 static bool show_demo_window = true;
 static bool show_another_window = false;
@@ -358,7 +361,7 @@ void imgui_init(const char *window_title)
 
     SDL_DisplayMode DM;
     SDL_GetCurrentDisplayMode(0, &DM);
-    float scale_factor = (float)DM.w / 1920;
+    scaling_factor = (float)DM.w / 1920;
 
     // Setup window
     SDL_WindowFlags window_flags = (SDL_WindowFlags)(SDL_WINDOW_VULKAN | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI);
@@ -388,7 +391,7 @@ void imgui_init(const char *window_title)
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGuiIO& io = ImGui::GetIO(); (void)io;
-    ImGui::GetStyle().ScaleAllSizes(scale_factor);
+    ImGui::GetStyle().ScaleAllSizes(scaling_factor);
     //io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;     // Enable Keyboard Controls
     //io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;      // Enable Gamepad Controls
 
@@ -427,7 +430,7 @@ void imgui_init(const char *window_title)
     //io.Fonts->AddFontFromFileTTF("../../misc/fonts/DroidSans.ttf", 16.0f);
     //io.Fonts->AddFontFromFileTTF("../../misc/fonts/ProggyTiny.ttf", 10.0f);
 #ifdef WIN32
-    ImFont* font = io.Fonts->AddFontFromFileTTF("c:\\Windows\\Fonts\\Arial.ttf", 13.0f * scale_factor, NULL, io.Fonts->GetGlyphRangesJapanese());
+    ImFont* font = io.Fonts->AddFontFromFileTTF("c:\\Windows\\Fonts\\Arial.ttf", default_font_size * scaling_factor, NULL, io.Fonts->GetGlyphRangesJapanese());
     IM_ASSERT(font != NULL);
 #endif
 
@@ -569,4 +572,9 @@ void imgui_cleanup()
 
     SDL_DestroyWindow(window);
     SDL_Quit();
+}
+
+auto imgui_default_font_size() -> float
+{
+    return default_font_size * scaling_factor;
 }

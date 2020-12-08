@@ -9,3 +9,5 @@ void imgui_new_frame();
 void imgui_frame_done();
 
 void imgui_cleanup();
+
+auto imgui_default_font_size() -> float;
