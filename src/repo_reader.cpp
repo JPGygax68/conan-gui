@@ -5,7 +5,7 @@
 #include <regex>
 #include <cassert>
 #include <fmt/core.h>
-#include "./sqlite/database.h"
+#include "./cache_db.h"
 #include "./repo_reader.h"
 
 
@@ -160,7 +160,7 @@ namespace Conan {
         auto file_ptr = _popen(fmt::format("conan search -r {} {}* --raw", remote, name_filter).c_str(), "r");
         if (!file_ptr) throw std::system_error(errno, std::generic_category());
 
-        SQLite::Database db;
+        Cache_db db;
 
         auto re = std::regex("([^/]+)/([^@]+)(?:@([^/]+)/(.+))?");
 

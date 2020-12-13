@@ -15,9 +15,9 @@ add_executable(
 
   repo_reader.cpp repo_reader.h
 
-  sqlite/database.cpp sqlite/database.h
-  sqlite/statement.cpp sqlite/statement.h
-  sqlite/types.h
+  cache_db.cpp cache_db.h
+
+  sqlite_wrapper/database.cpp sqlite_wrapper/database.h
 
   async_data.h
 )

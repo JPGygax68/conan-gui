@@ -6,7 +6,7 @@
 #include <span>
 #include <imgui.h>
 #include <fmt/core.h>
-#include "./sqlite/database.h"
+#include "./cache_db.h"
 #include "./repo_reader.h"
 #include "./imgui_app.h"
 
@@ -108,13 +108,15 @@ static void show_query_result_node(
 
 int main(int, char **)
 {
-    SQLite::Database database;
+    Cache_db database;
     Conan::Repository_reader repo_reader{ database };
 
     std::future<void> queued_op;
 
     // auto package_list = database.update_package_list();
     auto tree = Package_tree{};
+
+    database.create_or_update();
 
     imgui_init("Conan GUI");
 
@@ -123,6 +125,14 @@ int main(int, char **)
         { "pkg_id" },
         { "description", "license", "provides", "author", "topics" }
     );
+
+    auto pkg_list_select = database.prepare_statement( R"(
+        SELECT id, name, packages2.remote, user, channel, version, description, license, provides, author, topics FROM packages2
+        LEFT OUTER JOIN pkg_info ON pkg_info.pkg_id = packages2.id
+        WHERE name LIKE '?1%'
+        ORDER_BY SEMVER_PART(version, 1) DESC, SEMVER_PART(version, 2) DESC, SEMVER_PART(version, 3) DESC, version DESC
+    )");
+
 
     while (imgui_continue()) {
     

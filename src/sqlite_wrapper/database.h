@@ -8,19 +8,24 @@
 #include <variant>
 #include <sqlite3.h>
 
-#include "./types.h"
-// #include "./statement.h"
-
 
 template<typename T>
 concept StringView = std::is_same<T, std::string_view>::value;
 
 namespace SQLite {
 
-    // TODO: move to non-specific base module
+    using Blob = std::vector<uint8_t>;
 
-    // using Row = std::map<std::string_view, std::string>;
+    using Value = std::variant<
+        nullptr_t,
+        int64_t,
+        double,
+        std::string,    // TODO: use unsigned char string as SQLite does ?
+        Blob
+    >;
+
     using Row = std::vector<Value>;
+
     using Rows = std::vector<Row>;
 
     template <typename Cargo> class Grouping_node;
@@ -79,10 +84,8 @@ namespace SQLite {
 
         using select_callback = std::function<int(int col_count, const char* const col_names[], const char* const col_values[])>;
 
-        Database();
+        Database(const char *filename);
         ~Database();
-
-        // static auto& instance() { static Database db; return db; } // BAD IDEA! CONCURRENCY!
 
         void upsert_package(std::string_view remote, const std::string& reference);
 
@@ -106,6 +109,8 @@ namespace SQLite {
             std::initializer_list<std::string_view> params = {}
         ) -> Rows;
 
+        auto select_one(std::string_view statement, const std::initializer_list<Value> keys = {}) -> Row;
+
         template <typename Cargo>
         auto get_tree(
             std::string_view table,
@@ -127,8 +132,10 @@ namespace SQLite {
             std::initializer_list<std::string_view> extra_columns   /* Columns without uniqueness */
         ) -> sqlite3_stmt*;
 
-        // Execute a prepared statement that does not return any values.
+        // Execute a prepared statement. Call repeatedly as long as it returns true, calling get_row() every time to get row contents.
         bool execute(sqlite3_stmt*, std::initializer_list<Value> values);
+
+        void execute(std::string_view statement, std::string_view context = "");
 
         auto get_row(sqlite3_stmt*) -> Row;
 
@@ -138,6 +145,7 @@ namespace SQLite {
 
         auto query_single_row(const char *query, const char *context = nullptr) -> std::vector<std::string>;
 
+        [[deprecated]]
         void exec(const char *statement, std::string_view context = "");
 
         auto get_row_id(std::string_view table, std::string_view where_clause) -> int64_t;
