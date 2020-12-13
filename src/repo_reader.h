@@ -5,15 +5,25 @@
 #include <mutex>
 #include <future>
 #include "./async_data.h"
-#include "./database.h"
+#include "./sqlite/database.h"
 
 
 namespace Conan {
 
+    struct Package_info {
+        std::string description;
+        std::string license;
+        std::string provides;
+        std::string author;
+        std::string topics;
+        std::string creation_date;
+    };
+
+
     class Repository_reader {
     public:
         
-        explicit Repository_reader(Database& db);
+        explicit Repository_reader(SQLite::Database& db);
 
         ~Repository_reader();
 
@@ -71,7 +81,7 @@ namespace Conan {
 
         void update_package_list(std::string_view remote, std::string_view name_filter);
 
-        Database&                   database;
+        SQLite::Database&           database;
 
         async_data<std::vector<std::string>> remotes_ad;
 

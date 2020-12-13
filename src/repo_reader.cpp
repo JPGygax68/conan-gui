@@ -5,13 +5,13 @@
 #include <regex>
 #include <cassert>
 #include <fmt/core.h>
-#include "./database.h"
+#include "./sqlite/database.h"
 #include "./repo_reader.h"
 
 
 namespace Conan {
     
-    Repository_reader::Repository_reader(Database& db) : 
+    Repository_reader::Repository_reader(SQLite::Database& db) : 
         database{ db }
     {
         remotes_ad.obtain([]() {
@@ -115,7 +115,7 @@ namespace Conan {
 
         fclose(file_ptr);
 
-        database.set_package_info(pkg_id, info);
+        // database.set_package_info(pkg_id, info); // TODO: replace with Database::upsert()
 
         return info;
     }
@@ -160,7 +160,7 @@ namespace Conan {
         auto file_ptr = _popen(fmt::format("conan search -r {} {}* --raw", remote, name_filter).c_str(), "r");
         if (!file_ptr) throw std::system_error(errno, std::generic_category());
 
-        Database db;
+        SQLite::Database db;
 
         auto re = std::regex("([^/]+)/([^@]+)(?:@([^/]+)/(.+))?");
 

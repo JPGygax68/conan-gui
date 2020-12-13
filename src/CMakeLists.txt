@@ -13,7 +13,7 @@ add_executable(
 
   imgui_app.h imgui_app_vulkan.cpp
 
-  database.cpp database.h
+  sqlite/database.cpp sqlite/database.h
   repo_reader.cpp repo_reader.h
   async_data.h
 )

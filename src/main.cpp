@@ -6,24 +6,18 @@
 #include <span>
 #include <imgui.h>
 #include <fmt/core.h>
-#include "./database.h"
+#include "./sqlite/database.h"
 #include "./repo_reader.h"
 #include "./imgui_app.h"
 
 
 using namespace Conan;
 
-// struct Package_info_async {
-//     std::future<Package_info>   future;
-//     bool                        acquired = false;
-//     Package_info                value;
-// };
-
 using Package_info_async = async_data<Package_info>;
-using Package_group_node = Query_result_node<Package_info_async>;
+using Package_group_node = SQLite::Query_result_node<Package_info_async>;
 using Packages_root = Package_group_node;
 
-using Package_row = Row_content<Package_info_async>;
+using Package_row = SQLite::Row_content<Package_info_async>;
 
 struct Filtered_packages {
     std::future<Packages_root>          packages_future;    // querying from sqlite
@@ -71,7 +65,7 @@ static void show_query_result_node(
 
 int main(int, char **)
 {
-    Conan::Database database;
+    SQLite::Database database;
     Conan::Repository_reader repo_reader{ database };
 
     std::future<void> queued_op;
@@ -115,7 +109,7 @@ int main(int, char **)
                                 auto node = database.get_tree<Package_info_async>(
                                     "packages2 LEFT OUTER JOIN pkg_info ON pkg_info.pkg_id = packages2.id", 
                                     { "name", "packages2.remote", "user", "channel" },
-                                    { "packages2.id, packages2.remote, name, version, user, channel, description" }, 
+                                    { "packages2.id, packages2.remote, name, version, user, channel, description, license, provides, author, topics" }, 
                                     fmt::format("name like '{0}%'", std::string{letter}),
                                     "name, packages2.remote, user, channel, SEMVER_PART(version, 1) DESC, SEMVER_PART(version, 2) DESC, SEMVER_PART(version, 3) DESC, version DESC"
                                 );
@@ -133,7 +127,7 @@ int main(int, char **)
                         }
                     }
                     if (sublist.acquired) {
-                        show_query_result_node(sublist.packages_root, 4, [&](Row_content<Package_info_async>& row, int ridx) {
+                        show_query_result_node(sublist.packages_root, 4, [&](SQLite::Row_content<Package_info_async>& row, int ridx) {
                             int64_t id = std::stoll(row[0]);
                             auto& remote = row[1];
                             auto& name = row[2];
@@ -147,35 +141,40 @@ int main(int, char **)
                             ImGui::SameLine();
                             ImGui::SetCursorPosX(x + imgui_default_font_size() * 8);
                             ImGui::PushID(version.c_str());
-                            {
-                                if (!description.empty()) {
-                                    if (ImGui::Button("Re-query")) {
-                                        std::cout << "Re-querying..." << std::endl;
-                                        description = "";
-                                        row.cargo.reset();
-                                    }
-                                    ImGui::SameLine();
-                                    ImGui::TextWrapped("%s", description.c_str());
+                            if (!description.empty()) {
+                                if (ImGui::Button("Re-query")) {
+                                    std::cout << "Re-querying..." << std::endl;
+                                    description = "";
+                                    row.cargo.reset();
                                 }
-                                if (description.empty()) {
-                                    if (row.cargo.ready()) {
-                                        std::cout << "Obtained description: " << row.cargo.value().description << std::endl;
-                                        auto description = row.cargo.value().description;
-                                        database.set_package_description(row[0], row.cargo.value().description);
-                                        if (description.empty()) description = "(Failed to obtain package info)"; // TODO: this is a stopgap, need better handling
-                                        row[6] = description; // so we don't have to re-query
-                                        ImGui::NewLine();
+                                ImGui::SameLine();
+                                ImGui::TextWrapped("%s", description.c_str());
+                            }
+                            if (description.empty()) {
+                                if (row.cargo.ready()) {
+                                    std::cout << "Obtained description: " << row.cargo.value().description << std::endl;
+                                    auto description = row.cargo.value().description;
+                                    database.set_package_description(row[0], row.cargo.value().description);
+                                    if (description.empty()) description = "(Failed to obtain package info)"; // TODO: this is a stopgap, need better handling
+                                    //row[6] = description; // so we don't have to re-query
+                                    row[6] = ""; // trigger a re-query from the database TODO: does not work that way
+                                    ImGui::NewLine();
+                                }
+                                else {
+                                    if (row.cargo.busy()) {
+                                        ImGui::TextUnformatted("(Querying...)");
                                     }
                                     else {
-                                        if (row.cargo.busy()) {
-                                            ImGui::TextUnformatted("(Querying...)");
-                                        }
-                                        else {
-                                            row.cargo.obtain([&]() {
-                                                return repo_reader.get_info(remote, name, version, user, channel, id);
-                                            });
-                                        }
+                                        row.cargo.obtain([&]() {
+                                            return repo_reader.get_info(remote, name, version, user, channel, id);
+                                        });
                                     }
+                                }
+                            }
+                            else {
+                                if (open) {
+                                    ImGui::Text("License: %15s  Provides: %30s  Author: %30s", row[7].c_str(), row[8].c_str(), row[9].c_str());
+                                    ImGui::Text("Topics: %s", row[10].c_str());
                                 }
                             }
                             ImGui::PopID();

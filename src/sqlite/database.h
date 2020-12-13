@@ -12,31 +12,43 @@
 template<typename T>
 concept StringView = std::is_same<T, std::string_view>::value;
 
-namespace Conan {
+namespace SQLite {
 
     // TODO: move to non-specific base module
+
+    using Blob = std::vector<uint8_t>;
+    using Value = std::variant<
+        nullptr_t,
+        int64_t,
+        double,
+        std::string,    // TODO: use unsigned char string as SQLite does ?
+        Blob
+    >;
+    // using Row = std::map<std::string_view, std::string>;
+    using Row = std::vector<Value>;
+    using Rows = std::vector<Row>;
 
     template <typename Cargo> class Grouping_node;
     template <typename Cargo> class Row_packet_node;
     template <typename Cargo> class Row_content;
-    
+
     template <typename Cargo>
     using Query_result_node =  std::variant<Grouping_node<Cargo>, Row_packet_node<Cargo>>;
-    
+
     template <typename Cargo>
     class Grouping_node: public std::map<std::string, Query_result_node<Cargo>> {};
-    
+
     template <typename Cargo>
     class Row_content: public std::vector<std::string> {
     public:
         auto& as_vector() { return *static_cast<std::vector<std::string>*>(this); }
         Cargo cargo;
     };
-    
+
     template <typename Cargo>
     class Row_packet_node: public std::vector<Row_content<Cargo>> {};
-    
-    // Conan-specific 
+
+    // Conan-specific
 
     struct Package_designator {
         std::string             name;
@@ -60,13 +72,8 @@ namespace Conan {
         std::map<std::string, Channel> channels;
     };
 
-    struct Package_info {
-        std::string description;
-        std::string license;
-        std::string provides;
-        std::string author;
-        std::string topics;
-        std::string creation_date;
+
+    class Statement {
     };
 
 
@@ -91,17 +98,25 @@ namespace Conan {
         auto get_package_designators(std::string_view name_filter) -> Package_designators;
 
         void set_package_description(std::string_view id, std::string_view description);
-        void set_package_info(sqlite3_int64 pkg_id, const Package_info& info);
+        // void set_package_info(int64_t pkg_id, const Package_info& info);
 
         // auto get_package(std::string_view remote, std::string_view pkg_name) -> Package_row;
 
         void select(const char* statement, select_callback);
 
+        auto select(
+            std::initializer_list<std::string_view> columns,
+            std::string_view table,
+            std::string_view where_clause = "",
+            std::string_view order_by_clause = "",
+            std::initializer_list<std::string_view> params = {}
+        ) -> Rows;
+
         template <typename Cargo>
         auto get_tree(
             std::string_view table,
             std::initializer_list<std::string_view> group_by_cols,
-            std::initializer_list<std::string_view> data_cols, 
+            std::initializer_list<std::string_view> data_cols,
             std::string where_clause,
             std::string order_by_clause = ""
         ) -> Query_result_node<Cargo>;
@@ -115,7 +130,16 @@ namespace Conan {
         void exec(const char *statement, std::string_view context = "");
 
         auto get_row_id(std::string_view table, std::string_view where_clause) -> int64_t;
+
         auto insert(std::string_view table, std::string_view columns, std::string_view values) -> int64_t;
+
+        void upsert(
+            std::string_view table,
+            std::initializer_list<std::string_view> unique_columns,
+            std::initializer_list<std::string_view> extra_columns,
+            std::initializer_list<Value> values
+        );
+
         void drop_table(std::string_view name);
 
         sqlite3         *db_handle = nullptr;
@@ -139,13 +163,13 @@ auto join_strings(Seq strings, std::string_view separator = ",") -> std::string
         [=](auto a, auto b) { return std::string{ a } + std::string{ a.length() > 0 ? separator : "" } + std::string{ b }; });
 }
 
-namespace Conan {
+namespace SQLite {
 
     template<typename Cargo>
     inline auto Database::get_tree(
-        std::string_view table, 
-        std::initializer_list<std::string_view> group_by_cols, 
-        std::initializer_list<std::string_view> data_cols, 
+        std::string_view table,
+        std::initializer_list<std::string_view> group_by_cols,
+        std::initializer_list<std::string_view> data_cols,
         std::string where_clause,
         std::string order_by_clause
     ) -> Query_result_node<Cargo>
