@@ -13,6 +13,49 @@
 
 using namespace Conan;
 
+
+struct GUI {
+
+    struct Package_variants_node;
+    struct Remote_node;
+    struct User_node;
+    struct Channel_node;
+    struct Package_node;
+
+    struct Letter_node {
+        char letter;
+        std::map<std::string, Package_variants_node> package_nodes;
+    };
+
+    struct Package_variants_node {
+        std::string name;
+        std::map<std::string, Remote_node> remote_nodes;
+    };
+
+    struct Remote_node {
+        std::string name;
+        std::map<std::string, User_node> user_nodes;
+    };
+
+    struct User_node {
+        std::string name;
+        std::map<std::string, Channel_node> channel_nodes;
+    };
+
+    struct Channel_node {
+        std::string name;
+        std::map<std::string, Package_node> version_nodes;
+    };
+
+    struct Package_node {
+        std::string version;
+    };
+};
+
+
+
+
+
 using Package_info_async = async_data<Package_info>;
 using Package_group_node = SQLite::Query_result_node<Package_info_async>;
 using Packages_root = Package_group_node;
@@ -74,6 +117,12 @@ int main(int, char **)
     auto tree = Package_tree{};
 
     imgui_init("Conan GUI");
+
+    auto pkg_info_upsert = database.prepare_upsert(
+        "pkg_info",
+        { "pkg_id" },
+        { "description", "license", "provides", "author", "topics" }
+    );
 
     while (imgui_continue()) {
     
@@ -151,13 +200,10 @@ int main(int, char **)
                                 ImGui::TextWrapped("%s", description.c_str());
                             }
                             if (description.empty()) {
-                                if (row.cargo.ready()) {
-                                    std::cout << "Obtained description: " << row.cargo.value().description << std::endl;
-                                    auto description = row.cargo.value().description;
-                                    database.set_package_description(row[0], row.cargo.value().description);
-                                    if (description.empty()) description = "(Failed to obtain package info)"; // TODO: this is a stopgap, need better handling
-                                    //row[6] = description; // so we don't have to re-query
-                                    row[6] = ""; // trigger a re-query from the database TODO: does not work that way
+                                if (row.cargo.ready()) {                                   
+                                    std::cout << "Obtained pkg info" << std::endl;
+                                    // TODO: make this async
+                                    sublist.acquired = false;
                                     ImGui::NewLine();
                                 }
                                 else {
@@ -166,14 +212,18 @@ int main(int, char **)
                                     }
                                     else {
                                         row.cargo.obtain([&]() {
-                                            return repo_reader.get_info(remote, name, version, user, channel, id);
+                                            const auto& info = repo_reader.get_info(remote, name, version, user, channel, id);
+                                            database.execute(pkg_info_upsert, { id, info.description, info.license, info.provides, info.author, info.topics });
+                                            return info;
                                         });
                                     }
                                 }
                             }
                             else {
                                 if (open) {
-                                    ImGui::Text("License: %15s  Provides: %30s  Author: %30s", row[7].c_str(), row[8].c_str(), row[9].c_str());
+                                    ImGui::Text("License: %s", row[7].c_str());
+                                    ImGui::Text("Provides: %s", row[8].c_str());
+                                    ImGui::Text("Author: %s", row[9].c_str());
                                     ImGui::Text("Topics: %s", row[10].c_str());
                                 }
                             }

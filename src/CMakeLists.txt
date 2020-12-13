@@ -13,8 +13,12 @@ add_executable(
 
   imgui_app.h imgui_app_vulkan.cpp
 
-  sqlite/database.cpp sqlite/database.h
   repo_reader.cpp repo_reader.h
+
+  sqlite/database.cpp sqlite/database.h
+  sqlite/statement.cpp sqlite/statement.h
+  sqlite/types.h
+
   async_data.h
 )
 

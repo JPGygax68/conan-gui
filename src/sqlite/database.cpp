@@ -22,14 +22,29 @@ std::string replace_string(std::string subject, const std::string& search, const
 
 namespace SQLite {
 
-    static void throw_sqlite_error(int category, const char *err_msg = nullptr, std::string_view context = "") {
-        using namespace std::string_literals;
-        auto msg = fmt::format("SQLite error (category: {0})", sqlite3_errstr(category));
-        if (err_msg) msg += ": "s + err_msg;
-        if (!context.empty()) { msg += "; context: "; msg += context; }
-        std::cerr << msg << std::endl;
-        throw std::runtime_error(msg);
-    }
+    class sqlite_error: public std::exception {
+    public:
+        explicit sqlite_error(int code, const char* err_msg = nullptr, std::string_view context = ""):
+            exception(make_message(code, err_msg, context).c_str())
+        {}
+    private:
+        static auto make_message(int code, const char* err_msg, std::string_view context) -> std::string {
+            using namespace std::string_literals;
+            auto msg = fmt::format("SQLite error {0}", sqlite3_errstr(code));
+            if (err_msg) msg += ": "s + err_msg;
+            if (!context.empty()) { msg += "; context: "; msg += context; }
+            return msg;
+        }
+    };
+    
+    // static void throw sqlite_error(int code, const char *err_msg = nullptr, std::string_view context = "") {
+    //     using namespace std::string_literals;
+    //     auto msg = fmt::format("SQLite error {0}", sqlite3_errstr(code));
+    //     if (err_msg) msg += ": "s + err_msg;
+    //     if (!context.empty()) { msg += "; context: "; msg += context; }
+    //     std::cerr << msg << std::endl;
+    //     throw std::runtime_error(msg);
+    // }
 
     Database::Database()
     {
@@ -57,7 +72,7 @@ namespace SQLite {
         int db_err = 0;
 
         db_err = sqlite3_open(db_path.string().c_str(), &db_handle);
-        if (db_err != SQLITE_OK) throw_sqlite_error(db_err, "trying to open/create database");
+        if (db_err != SQLITE_OK) throw sqlite_error(db_err, "trying to open/create database");
 
         unsigned version = 0;
         db_err = sqlite3_exec(db_handle, "PRAGMA user_version",
@@ -66,7 +81,7 @@ namespace SQLite {
             *pver = std::stoi(textv[0]);
             return 0;
         }, &version, nullptr);
-        if (db_err != 0) throw_sqlite_error(db_err, "trying to retrieve user_version");
+        if (db_err != 0) throw sqlite_error(db_err, "trying to retrieve user_version");
 
         db_err = sqlite3_exec(db_handle, R"(
             create table if not exists packages (
@@ -75,7 +90,7 @@ namespace SQLite {
                 last_poll DATETIME
             );
         )", nullptr, nullptr, &errmsg);
-        if (db_err != 0) throw_sqlite_error(db_err, "trying to create packages table");
+        if (db_err != 0) throw sqlite_error(db_err, "trying to create packages table");
 
         if (version == 0) {
             db_err = sqlite3_exec(db_handle, R"(
@@ -85,13 +100,13 @@ namespace SQLite {
                 create table packages as select * from packages_old;
                 pragma user_version = 1;
             )", nullptr, nullptr, &errmsg);
-            if (db_err != 0) throw_sqlite_error(db_err, "trying to add primary key to packages table");
+            if (db_err != 0) throw sqlite_error(db_err, "trying to add primary key to packages table");
         }
 
         db_err = sqlite3_exec(db_handle, R"(
             create unique index if not exists remote_reference on packages (remote, reference);
         )", nullptr, nullptr, &errmsg);
-        if (db_err != 0) throw_sqlite_error(db_err, "trying to create index remote_reference on packages table");
+        if (db_err != 0) throw sqlite_error(db_err, "trying to create index remote_reference on packages table");
 
         db_err = sqlite3_exec(db_handle, R"(
             create table if not exists package_info (
@@ -100,7 +115,7 @@ namespace SQLite {
                 last_poll DATETIME
             );
         )", nullptr, nullptr, &errmsg);
-        if (db_err != 0) throw_sqlite_error(db_err, "trying to create packages table");
+        if (db_err != 0) throw sqlite_error(db_err, "trying to create packages table");
 
         if (version == 12) {
             exec(R"(
@@ -176,7 +191,7 @@ namespace SQLite {
             db_err = sqlite3_exec(db_handle, R"(
                 create unique index if not exists pkg_info_pkg_id on pkg_info (pkg_id);
             )", nullptr, nullptr, &errmsg);
-            if (db_err != 0) throw_sqlite_error(db_err, "trying to create index pkg_info_pkg_id on pkg_info table");
+            if (db_err != 0) throw sqlite_error(db_err, "trying to create index pkg_info_pkg_id on pkg_info table");
         }
 
         if (version == 10 || version == 11) {
@@ -236,7 +251,7 @@ namespace SQLite {
             )";
             sqlite3_stmt *stmt = nullptr;
             auto err = sqlite3_prepare_v2(db_handle, statement, -1, &stmt, nullptr);
-            if (err != SQLITE_OK) throw_sqlite_error(err, nullptr, "trying to prepare statement upsert_package_description");
+            if (err != SQLITE_OK) throw sqlite_error(err, nullptr, "trying to prepare statement upsert_package_description");
             return stmt;
         }();
 
@@ -261,7 +276,7 @@ namespace SQLite {
         )", remote, reference);
         db_err = sqlite3_exec(db_handle, statement.c_str(), nullptr, nullptr, &errmsg);
 
-        if (db_err != 0) throw_sqlite_error(db_err, "trying to insert/upsert into packages table");
+        if (db_err != 0) throw sqlite_error(db_err, "trying to insert/upsert into packages table");
     }
 
     void Database::upsert_package2(std::string_view remote, std::string_view name, std::string_view version, std::string_view user, std::string_view channel)
@@ -287,7 +302,7 @@ namespace SQLite {
             plst->push_back({ .name = textv[0], .repository = textv[1] });
             return 0;
         }, &list, &errmsg);
-        if (db_err != 0) throw_sqlite_error(db_err, errmsg, "trying to query packages");
+        if (db_err != 0) throw sqlite_error(db_err, errmsg, "trying to query packages");
 
         return list;
     }
@@ -315,7 +330,7 @@ namespace SQLite {
     //     err = sqlite3_bind_text (stmt, sqlite3_bind_parameter_index(stmt, "AUTHOR"     ), info.author     .data(), info.author     .size(), nullptr);
     //     err = sqlite3_bind_text (stmt, sqlite3_bind_parameter_index(stmt, "TOPICS"     ), info.topics     .data(), info.topics     .size(), nullptr);
     //     err = sqlite3_step(stmt);
-    //     if (err != SQLITE_DONE) throw_sqlite_error(err, nullptr, "trying to execute prepared statement upsert_package_info");
+    //     if (err != SQLITE_DONE) throw sqlite_error(err, nullptr, "trying to execute prepared statement upsert_package_info");
     // }
 
     auto Database::query_single_row(const char *query, const char *context) -> std::vector<std::string>
@@ -331,7 +346,7 @@ namespace SQLite {
             return 0;
         }, &output, &errmsg);
 
-        if (dberr != 0) throw_sqlite_error(dberr, context);
+        if (dberr != 0) throw sqlite_error(dberr, context);
 
         return output;
     }
@@ -343,7 +358,7 @@ namespace SQLite {
 
         db_err = sqlite3_exec(db_handle, statement, nullptr, nullptr, &errmsg);
 
-        if (db_err != 0) throw_sqlite_error(db_err, errmsg, context);
+        if (db_err != 0) throw sqlite_error(db_err, errmsg, context);
     }
 
     void Database::select(const char *statement, select_callback cb)
@@ -353,7 +368,7 @@ namespace SQLite {
             select_callback& cb = *static_cast<select_callback*>(data);
             return cb(coln, (const char * const *)textv, (const char * const *)namev);
         }, &cb, &errmsg);
-        if (db_err != 0) throw_sqlite_error(db_err, errmsg);
+        if (db_err != 0) throw sqlite_error(db_err, errmsg);
     }
 
     auto Database::select(
@@ -373,18 +388,18 @@ namespace SQLite {
         // Prepare the statement
         sqlite3_stmt* stmt = nullptr;
         auto err = sqlite3_prepare_v2(db_handle, statement.c_str(), -1, &stmt, nullptr);
-        if (err != SQLITE_OK) throw_sqlite_error(err, nullptr, "trying to prepare statement: "s + statement);
+        if (err != SQLITE_OK) throw sqlite_error(err, nullptr, "trying to prepare statement: "s + statement);
 
         // Bind the parameters
         for (auto i = 0U; auto& param: params) {
             err = sqlite3_bind_text(stmt, i, param.data(), param.size(), nullptr);
-            if (err != SQLITE_OK) throw_sqlite_error(err, nullptr, "trying to bind value to prepared statement");
+            if (err != SQLITE_OK) throw sqlite_error(err, nullptr, "trying to bind value to prepared statement");
             i ++;
         }
 
         // Execute the statement and collect the rows
         Rows rows;
-        if (err != SQLITE_DONE) throw_sqlite_error(err, nullptr, "trying to execute prepared statement upsert_package_info");
+        if (err != SQLITE_DONE) throw sqlite_error(err, nullptr, "trying to execute prepared statement upsert_package_info");
         do {
             err  = sqlite3_step(stmt);
             if (err == SQLITE_ROW) {
@@ -424,30 +439,30 @@ namespace SQLite {
         )", table, columns, values);
         db_err = sqlite3_exec(db_handle, statement.c_str(), nullptr, nullptr, &errmsg);
 
-        if (db_err != 0) throw_sqlite_error(db_err, errmsg, fmt::format("trying to insert into table \"{0}\"", table));
+        if (db_err != 0) throw sqlite_error(db_err, errmsg, fmt::format("trying to insert into table \"{0}\"", table));
 
         return sqlite3_last_insert_rowid(db_handle);
     }
 
-    void Database::upsert(
-        std::string_view table,
-        std::initializer_list<std::string_view> unique_columns,
-        std::initializer_list<std::string_view> extra_columns,
-        std::initializer_list<Value> values
-    ) {
+    auto Database::prepare_upsert(
+        std::string_view table, 
+        std::initializer_list<std::string_view> unique_columns, 
+        std::initializer_list<std::string_view> extra_columns
+    ) -> sqlite3_stmt*
+    {
         using namespace std::string_literals;
 
         std::vector<std::string> all_columns, unique_equals;
-        for (auto i = 0U; auto& col: unique_columns) {
+        for (auto i = 0U; auto & col: unique_columns) {
             unique_equals.push_back(fmt::format("{0}=?{1}", col, ++i));
-            all_columns.push_back(std::string{col});
+            all_columns.push_back(std::string{ col });
         }
-        for (auto& col: extra_columns)
-            all_columns.push_back(std::string{col});
+        for (auto& col : extra_columns)
+            all_columns.push_back(std::string{ col });
 
         std::vector<std::string> all_placeholders, extra_placeholders, extra_setters;
-        for (auto i = 0U; auto& col: unique_columns) all_placeholders.push_back(fmt::format("?{0}", ++i));
-        for (auto i = unique_columns.size(); auto& col: extra_columns) {
+        for (auto i = 0U; auto & col: unique_columns) all_placeholders.push_back(fmt::format("?{0}", ++i));
+        for (auto i = unique_columns.size(); auto & col: extra_columns) {
             ++i;
             auto placeholder = fmt::format("?{0}", i);
             all_placeholders.push_back(placeholder);
@@ -455,7 +470,7 @@ namespace SQLite {
             extra_setters.push_back(fmt::format("{0}=?{1}", col, i));
         }
 
-        auto statement = fmt::format("INSERT INTO {0} ({1}) VALUES({2}) ON CONFLICT({3}) DO UPDATE SET ({4})",
+        auto statement = fmt::format("INSERT INTO {0} ({1}) VALUES({2}) ON CONFLICT({3}) DO UPDATE SET {4}",
             /* 0 */ table,
             /* 1 */ join_strings(all_columns, ", "),
             /* 2 */ join_strings(all_placeholders, ", "),
@@ -463,24 +478,63 @@ namespace SQLite {
             /* 4 */ join_strings(extra_setters, ", ")
         );
 
-        // Prepare the statement
-        sqlite3_stmt* stmt = nullptr;
-        auto err = sqlite3_prepare_v2(db_handle, statement.c_str(), -1, &stmt, nullptr);
-        if (err != SQLITE_OK) throw_sqlite_error(err, nullptr, "trying to prepare statement: "s + statement);
+        return prepare_statement(statement);
+    }
 
-        // Bind the parameters
-        for (auto i = 1U; auto & param: values) {
-            int err = 0;
-            if      (param.index() == 0) err = sqlite3_bind_null(stmt, i);
-            else if (param.index() == 1) err = sqlite3_bind_int64(stmt, i, std::get<1>(param));
-            else if (param.index() == 2) err = sqlite3_bind_double(stmt, i, std::get<2>(param));
-            else if (param.index() == 3) err = sqlite3_bind_text(stmt, i, std::get<3>(param).data(), std::get<3>(param).size(), nullptr);
-            ++i;
-            assert(err >= 0);
+    auto Database::prepare_statement(std::string_view statement) -> sqlite3_stmt*
+    {
+        sqlite3_stmt* stmt = nullptr;
+        auto err = sqlite3_prepare_v2(db_handle, statement.data(), statement.size(), &stmt, nullptr);
+        if (err != SQLITE_OK) throw sqlite_error(err, nullptr, "trying to prepare statement");
+        return stmt;
+    }
+
+    bool Database::execute(sqlite3_stmt* stmt, std::initializer_list<Value> values)
+    {
+        if (sqlite3_stmt_busy(stmt) == 0) {
+            // Bind the parameters
+            for (auto i = 1U; auto & param: values) {
+                int err = 0;
+                if      (param.index() == 0) err = sqlite3_bind_null  (stmt, i);
+                else if (param.index() == 1) err = sqlite3_bind_int64 (stmt, i, std::get<1>(param));
+                else if (param.index() == 2) err = sqlite3_bind_double(stmt, i, std::get<2>(param));
+                else if (param.index() == 3) err = sqlite3_bind_text  (stmt, i, std::get<3>(param).data(), std::get<3>(param).size(), nullptr);
+                ++i;
+                assert(err >= 0);
+            }
         }
 
-        err = sqlite3_step(stmt);
-        if (err != SQLITE_DONE) throw_sqlite_error(err, nullptr, "trying to execute prepared statement: "s + statement);
+        int code = sqlite3_step(stmt);
+        if      (code == SQLITE_ROW)  return true;
+        else if (code == SQLITE_DONE) return false;
+        else throw sqlite_error(code, nullptr, "trying to step through prepared statement");
+    }
+
+    auto Database::get_row(sqlite3_stmt* stmt) -> Row
+    {
+        Row row;
+        for (auto i = 0U; i < sqlite3_column_count(stmt); i++) {
+            switch (sqlite3_column_type(stmt, i)) {
+            case SQLITE_INTEGER: 
+                row.push_back(Value{sqlite3_column_int64 (stmt, i)}); 
+                break;
+            case SQLITE_FLOAT: 
+                row.push_back(Value{sqlite3_column_double(stmt, i)}); 
+                break;
+            case SQLITE_BLOB: {
+                auto data = (const uint8_t*)sqlite3_column_blob(stmt, i);
+                auto size = sqlite3_column_bytes(stmt, i);
+                row.push_back(std::move(Blob{data, data + size}));
+                break;
+            }
+            case SQLITE_TEXT: 
+                row.push_back(Value{ (const char*)sqlite3_column_text(stmt, i) }); 
+                break;
+            case SQLITE_NULL: 
+                break;
+            }
+        }
+        return row;
     }
 
     void Database::drop_table(std::string_view name)

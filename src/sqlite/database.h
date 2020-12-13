@@ -8,6 +8,9 @@
 #include <variant>
 #include <sqlite3.h>
 
+#include "./types.h"
+// #include "./statement.h"
+
 
 template<typename T>
 concept StringView = std::is_same<T, std::string_view>::value;
@@ -16,14 +19,6 @@ namespace SQLite {
 
     // TODO: move to non-specific base module
 
-    using Blob = std::vector<uint8_t>;
-    using Value = std::variant<
-        nullptr_t,
-        int64_t,
-        double,
-        std::string,    // TODO: use unsigned char string as SQLite does ?
-        Blob
-    >;
     // using Row = std::map<std::string_view, std::string>;
     using Row = std::vector<Value>;
     using Rows = std::vector<Row>;
@@ -73,8 +68,7 @@ namespace SQLite {
     };
 
 
-    class Statement {
-    };
+    class Statement;
 
 
     class Database {
@@ -121,6 +115,23 @@ namespace SQLite {
             std::string order_by_clause = ""
         ) -> Query_result_node<Cargo>;
 
+        // Prepare a "select" statement.
+        auto prepare_statement(
+            std::string_view statement
+        ) -> sqlite3_stmt*;
+
+        // Prepare an "upsert" statement.
+        auto prepare_upsert(
+            std::string_view table,
+            std::initializer_list<std::string_view> unique_columns  /* Columns that must be unique */,
+            std::initializer_list<std::string_view> extra_columns   /* Columns without uniqueness */
+        ) -> sqlite3_stmt*;
+
+        // Execute a prepared statement that does not return any values.
+        bool execute(sqlite3_stmt*, std::initializer_list<Value> values);
+
+        auto get_row(sqlite3_stmt*) -> Row;
+
     private:
 
         static auto escape_single_quotes(std::string_view s) -> std::string;
@@ -132,13 +143,6 @@ namespace SQLite {
         auto get_row_id(std::string_view table, std::string_view where_clause) -> int64_t;
 
         auto insert(std::string_view table, std::string_view columns, std::string_view values) -> int64_t;
-
-        void upsert(
-            std::string_view table,
-            std::initializer_list<std::string_view> unique_columns,
-            std::initializer_list<std::string_view> extra_columns,
-            std::initializer_list<Value> values
-        );
 
         void drop_table(std::string_view name);
 
