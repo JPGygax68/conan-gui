@@ -15,6 +15,8 @@ add_executable(
 
   repo_reader.cpp repo_reader.h
 
+  alphabetic_tree.cpp alphabetic_tree.h
+
   cache_db.cpp cache_db.h
 
   sqlite_wrapper/database.cpp sqlite_wrapper/database.h

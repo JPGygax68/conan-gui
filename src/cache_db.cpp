@@ -1,6 +1,7 @@
 #include <iostream>
 #include <filesystem>
 #include <string>
+#include <regex>
 #include "./cache_db.h"
 
 
@@ -26,13 +27,39 @@ static auto get_filename() {
 Cache_db::Cache_db():
     Database{ get_filename().c_str() }
 {
+    sqlite3_create_function(
+        handle(),
+        "SEMVER_PART", 2,
+        SQLITE_UTF8 | SQLITE_DETERMINISTIC | SQLITE_DIRECTONLY,
+        nullptr,
+        [](sqlite3_context* context, int argc, sqlite3_value** argv) {
+            // TODO: improve to support a fourth part (after either a dash or another dot)
+            static const auto re = std::regex("^(\\d+)\\.(\\d+)\\.(\\d+)$");
+            // auto& re = *static_cast<std::regex*>(sqlite3_user_data(context));
+            if (argc == 2) {
+                std::smatch m;
+                std::string version{ (const char*)sqlite3_value_text(argv[0]) };
+                int index = sqlite3_value_int(argv[1]);
+                if (!(index >= 1 && index <= 3)) {
+                    sqlite3_result_error(context, "The second parameter to SEMVER_PART() must be between 1 and 3", -1);
+                    return;
+                }
+                if (std::regex_match(version, m, re)) {
+                    sqlite3_result_int(context, std::stoi(m[index]));
+                    return;
+                }
+            }
+            sqlite3_result_null(context);
+        },
+        nullptr, nullptr
+    );
 }
 
 void Cache_db::create_or_update()
 {
-    char* errmsg;
-    int db_err = 0;
-
+    // char* errmsg;
+    // int db_err = 0;
+    // 
     // unsigned version = 0;
     // db_err = sqlite3_exec(db_handle, "PRAGMA user_version",
     //     [](void* version_, int coln, char* textv[], char* namev[]) -> int {
@@ -176,33 +203,6 @@ void Cache_db::create_or_update()
             return 0;
             });
     }
-
-    sqlite3_create_function(
-        db_handle,
-        "SEMVER_PART", 2,
-        SQLITE_UTF8 | SQLITE_DETERMINISTIC | SQLITE_DIRECTONLY,
-        nullptr,
-        [](sqlite3_context* context, int argc, sqlite3_value** argv) {
-            // TODO: improve to support a fourth part (after either a dash or another dot)
-            static const auto re = std::regex("^(\\d+)\\.(\\d+)\\.(\\d+)$");
-            // auto& re = *static_cast<std::regex*>(sqlite3_user_data(context));
-            if (argc == 2) {
-                std::smatch m;
-                std::string version{ (const char*)sqlite3_value_text(argv[0]) };
-                int index = sqlite3_value_int(argv[1]);
-                if (!(index >= 1 && index <= 3)) {
-                    sqlite3_result_error(context, "The second parameter to SEMVER_PART() must be between 1 and 3", -1);
-                    return;
-                }
-                if (std::regex_match(version, m, re)) {
-                    sqlite3_result_int(context, std::stoi(m[index]));
-                    return;
-                }
-            }
-            sqlite3_result_null(context);
-        },
-        nullptr, nullptr
-            );
 
     exec("pragma user_version = 14;", "trying to set database version");
 

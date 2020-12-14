@@ -5,7 +5,6 @@
 #include <filesystem>
 #include <algorithm>
 #include <concepts>
-#include <regex>
 #include <fmt/core.h>
 
 #include "./database.h"
@@ -195,12 +194,12 @@ namespace SQLite {
             if (err == SQLITE_ROW) {
                 Row row;
                 for (auto i = 0U; const auto col_name: columns) {
-                    auto type = sqlite3_column_type(stmt, i);
-                    if (type == SQLITE_INTEGER)
+                    auto type = sqlite3_column_decltype(stmt, i);
+                    if ("INTEGER"s == type) // type if (type == SQLITE_INTEGER)
                         row.emplace_back(Value{ sqlite3_column_int64(stmt, i) });
-                    else if (type == SQLITE_FLOAT)
+                    else if ("FLOAT"s == type) // if (type == SQLITE_FLOAT)
                         row.emplace_back(Value{ sqlite3_column_double(stmt, i) });
-                    else if (type == SQLITE_TEXT)
+                    else if ("TEXT"s == type) // if (type == SQLITE_TEXT)
                         row.emplace_back(Value{ (const char *)sqlite3_column_text(stmt, i) });
                     else
                         row.emplace_back(Value{});
@@ -321,27 +320,28 @@ namespace SQLite {
 
     auto Database::get_row(sqlite3_stmt* stmt) -> Row
     {
+        using namespace std::string_literals;
+
         Row row;
         for (auto i = 0U; i < sqlite3_column_count(stmt); i++) {
-            switch (sqlite3_column_type(stmt, i)) {
-            case SQLITE_INTEGER:
+            auto type = sqlite3_column_decltype(stmt, i);
+            if (type == nullptr || "INTEGER"s == type)
                 row.push_back(Value{sqlite3_column_int64 (stmt, i)});
-                break;
-            case SQLITE_FLOAT:
+            else if ("FLOAT"s == type) 
                 row.push_back(Value{sqlite3_column_double(stmt, i)});
-                break;
-            case SQLITE_BLOB: {
+            else if ("BLOB"s == type) {
                 auto data = (const uint8_t*)sqlite3_column_blob(stmt, i);
                 auto size = sqlite3_column_bytes(stmt, i);
                 row.push_back(std::move(Blob{data, data + size}));
-                break;
             }
-            case SQLITE_TEXT:
-                row.push_back(Value{ (const char*)sqlite3_column_text(stmt, i) });
-                break;
-            case SQLITE_NULL:
-                break;
+            else if ("STRING"s == type) {
+                auto text = (const char*)sqlite3_column_text(stmt, i);
+                row.push_back(Value{text ? text : ""});
             }
+            else if ("NULL"s == type)
+                row.push_back(Value{nullptr});
+            else 
+                assert(false);
         }
         return row;
     }

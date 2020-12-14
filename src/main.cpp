@@ -9,52 +9,13 @@
 #include "./cache_db.h"
 #include "./repo_reader.h"
 #include "./imgui_app.h"
+#include "./alphabetic_tree.h"
 
 
 using namespace Conan;
 
 
-struct GUI {
-
-    struct Package_variants_node;
-    struct Remote_node;
-    struct User_node;
-    struct Channel_node;
-    struct Package_node;
-
-    struct Letter_node {
-        char letter;
-        std::map<std::string, Package_variants_node> package_nodes;
-    };
-
-    struct Package_variants_node {
-        std::string name;
-        std::map<std::string, Remote_node> remote_nodes;
-    };
-
-    struct Remote_node {
-        std::string name;
-        std::map<std::string, User_node> user_nodes;
-    };
-
-    struct User_node {
-        std::string name;
-        std::map<std::string, Channel_node> channel_nodes;
-    };
-
-    struct Channel_node {
-        std::string name;
-        std::map<std::string, Package_node> version_nodes;
-    };
-
-    struct Package_node {
-        std::string version;
-    };
-};
-
-
-
-
+#ifdef OLD_CODE
 
 using Package_info_async = async_data<Package_info>;
 using Package_group_node = SQLite::Query_result_node<Package_info_async>;
@@ -105,149 +66,184 @@ static void show_query_result_node(
     }
 }
 
+#endif // OLD_CODE
+
 
 int main(int, char **)
 {
-    Cache_db database;
-    Conan::Repository_reader repo_reader{ database };
+    try {
 
-    std::future<void> queued_op;
+        Cache_db database;
+        Conan::Repository_reader repo_reader{ database };
 
-    // auto package_list = database.update_package_list();
-    auto tree = Package_tree{};
+        std::future<void> queued_op;
+        // auto tree = Package_tree{};
 
-    database.create_or_update();
+        database.create_or_update();
 
-    imgui_init("Conan GUI");
+        imgui_init("Conan GUI");
 
-    auto pkg_info_upsert = database.prepare_upsert(
-        "pkg_info",
-        { "pkg_id" },
-        { "description", "license", "provides", "author", "topics" }
-    );
+        auto pkg_info_upsert = database.prepare_upsert(
+            "pkg_info",
+            { "pkg_id" },
+            { "description", "license", "provides", "author", "topics" }
+        );
 
-    auto pkg_list_select = database.prepare_statement( R"(
-        SELECT id, name, packages2.remote, user, channel, version, description, license, provides, author, topics FROM packages2
-        LEFT OUTER JOIN pkg_info ON pkg_info.pkg_id = packages2.id
-        WHERE name LIKE '?1%'
-        ORDER_BY SEMVER_PART(version, 1) DESC, SEMVER_PART(version, 2) DESC, SEMVER_PART(version, 3) DESC, version DESC
-    )");
+        Alphabetic_tree alphabetic_tree;
+        alphabetic_tree.get_from_database();
 
-
-    while (imgui_continue()) {
+        while (imgui_continue()) {
     
-        imgui_new_frame();
+            imgui_new_frame();
 
-        if (ImGui::Begin("Conan")) {
-            if (ImGui::Button("Re-read all repositories")) {
-                queued_op = repo_reader.requeue_all();
-            }
-            for (auto it = tree.letters.begin(); it != tree.letters.end(); it++) {
-                ImGui::AlignTextToFramePadding();
-                auto letter = it->first;
-                if (ImGui::TreeNodeEx(std::string{letter}.c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
-                    auto& sublist = it->second;
-                    ImGui::SameLine();
-                    if (sublist.refresh_future.valid()) {
-                        using namespace std::chrono_literals;
-                        if (sublist.refresh_future.wait_for(0us) == std::future_status::ready) {
-                            (void) sublist.refresh_future.get();
-                            sublist.acquired = false;
-                        } else
-                            ImGui::TextUnformatted("(querying...)");
-                    } else {
-                        if (ImGui::Button("Re-query")) {
-                            sublist.refresh_future = std::async(std::launch::async, [=, &repo_reader]() {
-                                repo_reader.read_letter_all_repositories(letter);
-                            });
-                        }
-                    }
-                    if (!sublist.acquired) {
-                        if (!sublist.packages_future.valid()) {
-                            sublist.packages_future = std::async(std::launch::async, [=, &database]() {
-                                auto node = database.get_tree<Package_info_async>(
-                                    "packages2 LEFT OUTER JOIN pkg_info ON pkg_info.pkg_id = packages2.id", 
-                                    { "name", "packages2.remote", "user", "channel" },
-                                    { "packages2.id, packages2.remote, name, version, user, channel, description, license, provides, author, topics" }, 
-                                    fmt::format("name like '{0}%'", std::string{letter}),
-                                    "name, packages2.remote, user, channel, SEMVER_PART(version, 1) DESC, SEMVER_PART(version, 2) DESC, SEMVER_PART(version, 3) DESC, version DESC"
-                                );
-                                return node;
-                            });
-                        }
-                        using namespace std::chrono_literals;
-                        auto result = sublist.packages_future.wait_for(0s);
-                        if (result == std::future_status::timeout) {
-                            ImGui::TextUnformatted("(Querying...)");
-                        }
-                        else if (result == std::future_status::ready) {
-                            sublist.packages_root = sublist.packages_future.get();
-                            sublist.acquired = true;
-                        }
-                    }
-                    if (sublist.acquired) {
-                        show_query_result_node(sublist.packages_root, 4, [&](SQLite::Row_content<Package_info_async>& row, int ridx) {
-                            int64_t id = std::stoll(row[0]);
-                            auto& remote = row[1];
-                            auto& name = row[2];
-                            auto& version = row[3];
-                            auto& user = row[4];
-                            auto& channel = row[5];
-                            auto& description = row[6];
-                            ImGui::AlignTextToFramePadding();
-                            auto x = ImGui::GetCursorPosX();
-                            auto open = ImGui::TreeNode(version.c_str());
-                            ImGui::SameLine();
-                            ImGui::SetCursorPosX(x + imgui_default_font_size() * 8);
-                            ImGui::PushID(version.c_str());
-                            if (!description.empty()) {
-                                if (ImGui::Button("Re-query")) {
-                                    std::cout << "Re-querying..." << std::endl;
-                                    description = "";
-                                    row.cargo.reset();
-                                }
-                                ImGui::SameLine();
-                                ImGui::TextWrapped("%s", description.c_str());
+            if (ImGui::Begin("Conan")) {
+                if (ImGui::Button("Re-read all repositories")) {
+                    queued_op = repo_reader.requeue_all();
+                }
+#ifdef OLD_CODE
+                for (auto it = tree.letters.begin(); it != tree.letters.end(); it++) {
+                    ImGui::AlignTextToFramePadding();
+                    auto letter = it->first;
+                    if (ImGui::TreeNodeEx(std::string{letter}.c_str(), ImGuiTreeNodeFlags_DefaultOpen)) {
+                        auto& sublist = it->second;
+                        ImGui::SameLine();
+                        if (sublist.refresh_future.valid()) {
+                            using namespace std::chrono_literals;
+                            if (sublist.refresh_future.wait_for(0us) == std::future_status::ready) {
+                                (void) sublist.refresh_future.get();
+                                sublist.acquired = false;
+                            } else
+                                ImGui::TextUnformatted("(querying...)");
+                        } else {
+                            if (ImGui::Button("Re-query")) {
+                                sublist.refresh_future = std::async(std::launch::async, [=, &repo_reader]() {
+                                    repo_reader.read_letter_all_repositories(letter);
+                                });
                             }
-                            if (description.empty()) {
-                                if (row.cargo.ready()) {                                   
-                                    std::cout << "Obtained pkg info" << std::endl;
-                                    // TODO: make this async
-                                    sublist.acquired = false;
-                                    ImGui::NewLine();
+                        }
+                        if (!sublist.acquired) {
+                            if (!sublist.packages_future.valid()) {
+                                sublist.packages_future = std::async(std::launch::async, [=, &database]() {
+                                    auto node = database.get_tree<Package_info_async>(
+                                        "packages2 LEFT OUTER JOIN pkg_info ON pkg_info.pkg_id = packages2.id", 
+                                        { "name", "packages2.remote", "user", "channel" },
+                                        { "packages2.id, packages2.remote, name, version, user, channel, description, license, provides, author, topics" }, 
+                                        fmt::format("name like '{0}%'", std::string{letter}),
+                                        "name, packages2.remote, user, channel, SEMVER_PART(version, 1) DESC, SEMVER_PART(version, 2) DESC, SEMVER_PART(version, 3) DESC, version DESC"
+                                    );
+                                    return node;
+                                });
+                            }
+                            using namespace std::chrono_literals;
+                            auto result = sublist.packages_future.wait_for(0s);
+                            if (result == std::future_status::timeout) {
+                                ImGui::TextUnformatted("(Querying...)");
+                            }
+                            else if (result == std::future_status::ready) {
+                                sublist.packages_root = sublist.packages_future.get();
+                                sublist.acquired = true;
+                            }
+                        }
+                        if (sublist.acquired) {
+                            show_query_result_node(sublist.packages_root, 4, [&](SQLite::Row_content<Package_info_async>& row, int ridx) {
+                                int64_t id = std::stoll(row[0]);
+                                auto& remote = row[1];
+                                auto& name = row[2];
+                                auto& version = row[3];
+                                auto& user = row[4];
+                                auto& channel = row[5];
+                                auto& description = row[6];
+                                ImGui::AlignTextToFramePadding();
+                                auto x = ImGui::GetCursorPosX();
+                                auto open = ImGui::TreeNode(version.c_str());
+                                ImGui::SameLine();
+                                ImGui::SetCursorPosX(x + imgui_default_font_size() * 8);
+                                ImGui::PushID(version.c_str());
+                                if (!description.empty()) {
+                                    if (ImGui::Button("Re-query")) {
+                                        std::cout << "Re-querying..." << std::endl;
+                                        description = "";
+                                        row.cargo.reset();
+                                    }
+                                    ImGui::SameLine();
+                                    ImGui::TextWrapped("%s", description.c_str());
                                 }
-                                else {
-                                    if (row.cargo.busy()) {
-                                        ImGui::TextUnformatted("(Querying...)");
+                                if (description.empty()) {
+                                    if (row.cargo.ready()) {                                   
+                                        std::cout << "Obtained pkg info" << std::endl;
+                                        // TODO: make this async
+                                        sublist.acquired = false;
+                                        ImGui::NewLine();
                                     }
                                     else {
-                                        row.cargo.obtain([&]() {
-                                            const auto& info = repo_reader.get_info(remote, name, version, user, channel, id);
-                                            database.execute(pkg_info_upsert, { id, info.description, info.license, info.provides, info.author, info.topics });
-                                            return info;
-                                        });
+                                        if (row.cargo.busy()) {
+                                            ImGui::TextUnformatted("(Querying...)");
+                                        }
+                                        else {
+                                            row.cargo.obtain([&]() {
+                                                const auto& info = repo_reader.get_info(remote, name, version, user, channel, id);
+                                                database.execute(pkg_info_upsert, { id, info.description, info.license, info.provides, info.author, info.topics });
+                                                return info;
+                                            });
+                                        }
                                     }
                                 }
-                            }
-                            else {
-                                if (open) {
-                                    ImGui::Text("License: %s", row[7].c_str());
-                                    ImGui::Text("Provides: %s", row[8].c_str());
-                                    ImGui::Text("Author: %s", row[9].c_str());
-                                    ImGui::Text("Topics: %s", row[10].c_str());
+                                else {
+                                    if (open) {
+                                        ImGui::Text("License: %s", row[7].c_str());
+                                        ImGui::Text("Provides: %s", row[8].c_str());
+                                        ImGui::Text("Author: %s", row[9].c_str());
+                                        ImGui::Text("Topics: %s", row[10].c_str());
+                                    }
                                 }
-                            }
-                            ImGui::PopID();
-                            if (open) ImGui::TreePop();
-                        });
+                                ImGui::PopID();
+                                if (open) ImGui::TreePop();
+                            });
+                        }
+                        ImGui::TreePop();
                     }
-                    ImGui::TreePop();
                 }
+#else
+                // TODO: this code should probably be moved into Alphabetic_tree, as it is "view" data
+                for (const auto& it_letter: alphabetic_tree.root) {
+                    if (ImGui::TreeNode(std::string{it_letter.first}.c_str())) {
+                        for (const auto& it_package: it_letter.second.packages) {
+                            if (ImGui::TreeNode(it_package.first.c_str())) {
+                                for (const auto& it_remote: it_package.second.remotes) {
+                                    if (ImGui::TreeNode(it_remote.first.c_str())) {
+                                        for (const auto& it_user: it_remote.second.users) {
+                                            if (ImGui::TreeNode(it_user.first.c_str())) {
+                                                for (const auto& it_channel: it_user.second.channels) {
+                                                    if (ImGui::TreeNode(it_channel.first.c_str())) {
+                                                        for (const auto& it_version: it_channel.second.versions) {
+                                                            if (ImGui::TreeNode(it_version.first.c_str())) {
+                                                                ImGui::TreePop();
+                                                            }
+                                                        }
+                                                        ImGui::TreePop();
+                                                    }
+                                                }
+                                                ImGui::TreePop();
+                                            }
+                                        }
+                                        ImGui::TreePop();
+                                    }
+                                }
+                                ImGui::TreePop();
+                            }
+                        }
+                        ImGui::TreePop();
+                    }
+                }
+#endif
             }
-        }
-        ImGui::End();
+            ImGui::End();
 
-        imgui_frame_done();
+            imgui_frame_done();
+        }
+    }
+    catch(const std::exception& e) {
+        std::cerr << e.what() << std::endl;
     }
 
     return 0;

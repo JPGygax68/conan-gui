@@ -16,6 +16,19 @@ namespace SQLite {
 
     using Blob = std::vector<uint8_t>;
 
+    //struct Value: public std::variant<
+    //    nullptr_t,
+    //    int64_t,
+    //    double,
+    //    std::string,    // TODO: use unsigned char string as SQLite does ?
+    //    Blob
+    //> {
+    //    auto& as_int64 () { return std::get<1>(*this); }
+    //    auto& as_double() { return std::get<2>(*this); }
+    //    auto& as_string() { return std::get<3>(*this); }
+    //    auto& as_blob  () { return std::get<4>(*this); }
+    //};
+
     using Value = std::variant<
         nullptr_t,
         int64_t,
@@ -23,6 +36,7 @@ namespace SQLite {
         std::string,    // TODO: use unsigned char string as SQLite does ?
         Blob
     >;
+
 
     using Row = std::vector<Value>;
 
@@ -133,11 +147,15 @@ namespace SQLite {
         ) -> sqlite3_stmt*;
 
         // Execute a prepared statement. Call repeatedly as long as it returns true, calling get_row() every time to get row contents.
-        bool execute(sqlite3_stmt*, std::initializer_list<Value> values);
+        bool execute(sqlite3_stmt*, std::initializer_list<Value> values = {});
 
         void execute(std::string_view statement, std::string_view context = "");
 
         auto get_row(sqlite3_stmt*) -> Row;
+
+    protected:
+        
+        auto handle() const { return db_handle; }
 
     private:
 
