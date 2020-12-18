@@ -31,16 +31,16 @@ void Alphabetic_tree::get_from_database()
 
 void Alphabetic_tree::draw()
 {
-    for (auto& it_letter : root) {
-        draw_letter_node(it_letter.first, it_letter.second);
+    for (auto& it : root) {
+        draw_letter_node(it.first, it.second);
     }
 }
 
 void Alphabetic_tree::draw_letter_node(char letter, Letter_node& node)
 {
     if (ImGui::TreeNode(std::string{letter}.c_str())) {
-        for (auto& it_package : node.packages) {
-            draw_package_variants(it_package.first.c_str(), it_package.second);
+        for (auto& it : node.packages) {
+            draw_package_variants(it.first.c_str(), it.second);
         }
         ImGui::TreePop();
     }
@@ -49,8 +49,8 @@ void Alphabetic_tree::draw_letter_node(char letter, Letter_node& node)
 void Alphabetic_tree::draw_package_variants(const char* pkg_name, Package_variants_node& node)
 {
     if (ImGui::TreeNode(pkg_name)) {
-        for (auto& it_remote : node.remotes) {
-            draw_remote(it_remote.first.c_str(), it_remote.second);
+        for (auto& it : node.remotes) {
+            draw_remote(it.first.c_str(), it.second);
         }
         ImGui::TreePop();
     }
@@ -59,8 +59,8 @@ void Alphabetic_tree::draw_package_variants(const char* pkg_name, Package_varian
 void Alphabetic_tree::draw_remote(const char* name, Remote_node& node)
 {
     if (ImGui::TreeNode(name)) {
-        for (auto& it_user : node.users) {
-            draw_user(it_user.first.c_str(), it_user.second);
+        for (auto& it : node.users) {
+            draw_user(it.first.c_str(), it.second);
         }
         ImGui::TreePop();
     }
@@ -69,7 +69,8 @@ void Alphabetic_tree::draw_remote(const char* name, Remote_node& node)
 void Alphabetic_tree::draw_user(const char* name, User_node& node)
 {
     if (ImGui::TreeNode(name)) {
-        for (auto& it_channel : node.channels) {
+        for (auto& it: node.channels) {
+            draw_channel(it.first.c_str(), it.second);
         }
         ImGui::TreePop();
     }
@@ -78,8 +79,8 @@ void Alphabetic_tree::draw_user(const char* name, User_node& node)
 void Alphabetic_tree::draw_channel(const char* name, Channel_node& node)
 {
     if (ImGui::TreeNode(name)) {
-        for (auto& it_version : node.versions) {
-            if (ImGui::TreeNode(it_version.first.c_str())) {
+        for (auto& it : node.versions) {
+            if (ImGui::TreeNode(it.first.c_str())) {
                 ImGui::TreePop();
             }
         }
