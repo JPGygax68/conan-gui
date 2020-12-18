@@ -204,37 +204,7 @@ int main(int, char **)
                     }
                 }
 #else
-                // TODO: this code should probably be moved into Alphabetic_tree, as it is "view" data
-                for (const auto& it_letter: alphabetic_tree.root) {
-                    if (ImGui::TreeNode(std::string{it_letter.first}.c_str())) {
-                        for (const auto& it_package: it_letter.second.packages) {
-                            if (ImGui::TreeNode(it_package.first.c_str())) {
-                                for (const auto& it_remote: it_package.second.remotes) {
-                                    if (ImGui::TreeNode(it_remote.first.c_str())) {
-                                        for (const auto& it_user: it_remote.second.users) {
-                                            if (ImGui::TreeNode(it_user.first.c_str())) {
-                                                for (const auto& it_channel: it_user.second.channels) {
-                                                    if (ImGui::TreeNode(it_channel.first.c_str())) {
-                                                        for (const auto& it_version: it_channel.second.versions) {
-                                                            if (ImGui::TreeNode(it_version.first.c_str())) {
-                                                                ImGui::TreePop();
-                                                            }
-                                                        }
-                                                        ImGui::TreePop();
-                                                    }
-                                                }
-                                                ImGui::TreePop();
-                                            }
-                                        }
-                                        ImGui::TreePop();
-                                    }
-                                }
-                                ImGui::TreePop();
-                            }
-                        }
-                        ImGui::TreePop();
-                    }
-                }
+                alphabetic_tree.draw();
 #endif
             }
             ImGui::End();

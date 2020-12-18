@@ -5210,7 +5210,7 @@ bool ImGui::ColorPicker4(const char* label, float col[4], ImGuiColorEditFlags fl
 }
 
 // A little color square. Return true when clicked.
-// FIXME: May want to display/ignore the alpha component in the color display? Yet show it in the tooltip.
+// FIXME: May want to display/ignore the alpha component in the color display? Yet draw it in the tooltip.
 // 'desc_id' is not called 'label' because we don't display it next to the button, but only in the tooltip.
 // Note that 'col' may be encoded in HSV if ImGuiColorEditFlags_InputHSV is set.
 bool ImGui::ColorButton(const char* desc_id, const ImVec4& col, ImGuiColorEditFlags flags, ImVec2 size)
@@ -7239,7 +7239,7 @@ void ImGui::TabBarCloseTab(ImGuiTabBar* tab_bar, ImGuiTabItem* tab)
     }
     else
     {
-        // Actually select before expecting closure attempt (on an UnsavedDocument tab user is expect to e.g. show a popup)
+        // Actually select before expecting closure attempt (on an UnsavedDocument tab user is expect to e.g. draw a popup)
         if (tab_bar->VisibleTabId != tab->ID)
             tab_bar->NextSelectedTabId = tab->ID;
     }
