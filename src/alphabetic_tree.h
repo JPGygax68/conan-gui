@@ -39,7 +39,6 @@ struct Alphabetic_tree {
     struct Version_node {
         uint64_t pkg_id = 0;
         std::string description;
-        bool have_info = false;
         async_data<Package_info> pkg_info_ad;
     };
 

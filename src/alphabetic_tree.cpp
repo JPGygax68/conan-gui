@@ -110,22 +110,24 @@ void Alphabetic_tree::draw_version(const char* name, Version_node& node)
     auto open = ImGui::TreeNode(name);
 
     ImGui::SameLine();
-    auto requery = ImGui::Button("Re-query");
+
+    auto requery = false;
+    if (node.pkg_info_ad.busy() && !node.pkg_info_ad.ready()) {
+        ImGui::TextUnformatted("(Querying...)");
+    }
+    else {
+        requery = ImGui::Button("Re-query");
+        if (requery)
+            node.pkg_info_ad.reset();
+    }
 
     ImGui::SameLine();
     ImGui::TextUnformatted(node.description.c_str());
 
-    if (requery) {
-        node.have_info = false;
-        node.pkg_info_ad.reset();
-    }
-
-    if (!node.have_info) {
-        if (node.pkg_info_ad.ready())
-            node.have_info = true;
-        else
+    if (requery || open && !node.pkg_info_ad.ready()) {
+        if (node.pkg_info_ad.blank()) {
             node.pkg_info_ad.obtain(
-                [this](const Package_key key, int64_t pkg_id, bool requery) {
+                [this, &node](const Package_key key, int64_t pkg_id, bool requery) {
                     Cache_db db;
                     std::optional<Package_info> info;
                     if (!requery) {
@@ -133,23 +135,27 @@ void Alphabetic_tree::draw_version(const char* name, Version_node& node)
                     }
                     if (!info) {
                         info = repo_reader.get_info(key);
+                        node.description = info->description;
                         db.upsert_package_info(pkg_id, *info);
                     }
                     return *info;
-                }, 
-                Package_key{remote, package, user, channel, version},
+                },
+                Package_key{ remote, package, user, channel, version },
                 node.pkg_id,
                 requery || node.description.empty()
             );
+        }
     }
-        
+
     if (open) {
-        if (node.have_info) {
+        if (node.pkg_info_ad.ready()) {
             const auto& info = node.pkg_info_ad.value();
             ImGui::Text("License: %s", info.license.c_str());
         }
-        else 
-            ImGui::TextUnformatted("(Querying...)");
+        else {
+            ImGui::TextUnformatted("(please wait...)");
+        }
         ImGui::TreePop();
     }
+
 }

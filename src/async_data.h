@@ -19,6 +19,10 @@ struct async_data {
         return _future.valid();
     }
 
+    bool blank() {
+        return !busy() && !ready();
+    }
+
     template <typename Func, typename... Args>
     void obtain(Func fn, Args... args) {
         assert(!_done && "Do not call obtain() again once the data is ready - did you forget to check with ready() ?");

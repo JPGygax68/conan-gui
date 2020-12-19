@@ -37,7 +37,6 @@ namespace SQLite {
         Blob
     >;
 
-
     using Row = std::vector<Value>;
 
     using Rows = std::vector<Row>;
@@ -62,31 +61,6 @@ namespace SQLite {
     template <typename Cargo>
     class Row_packet_node: public std::vector<Row_content<Cargo>> {};
 
-    // Conan-specific
-
-    struct Package_designator {
-        std::string             name;
-        std::string             repository;
-        // TODO: more ? queries ?
-    };
-
-    using Package_designators = std::vector<Package_designator>;
-
-    struct Version {
-        std::string description;
-        // TODO: lots more data returned by "info" command
-        // TODO: "last_seen" date+time
-    };
-
-    struct Channel {
-        std::map<std::string, Version> versions;
-    };
-
-    struct User {
-        std::map<std::string, Channel> channels;
-    };
-
-
     class Statement;
 
 
@@ -104,14 +78,6 @@ namespace SQLite {
         void upsert_package(std::string_view remote, const std::string& reference);
 
         void upsert_package2(std::string_view remote, std::string_view name, std::string_view version, std::string_view user, std::string_view channel);
-
-        // TODO: replace with more structured data
-        auto get_package_designators(std::string_view name_filter) -> Package_designators;
-
-        void set_package_description(std::string_view id, std::string_view description);
-        // void set_package_info(int64_t pkg_id, const Package_info& info);
-
-        // auto get_package(std::string_view remote, std::string_view pkg_name) -> Package_row;
 
         void select(const char* statement, select_callback);
 

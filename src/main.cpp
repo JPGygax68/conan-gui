@@ -73,21 +73,16 @@ int main(int, char **)
 {
     try {
 
-        Cache_db database;
         Conan::Repository_reader repo_reader;
 
         std::future<void> queued_op;
-        // auto tree = Package_tree{};
 
-        database.create_or_update();
+        {
+            Cache_db database;
+            database.create_or_update();
+        }
 
         imgui_init("Conan GUI");
-
-        auto pkg_info_upsert = database.prepare_upsert(
-            "pkg_info",
-            { "pkg_id" },
-            { "description", "license", "provides", "author", "topics" }
-        );
 
         Alphabetic_tree alphabetic_tree{ repo_reader };
         alphabetic_tree.get_from_database();
@@ -109,7 +104,7 @@ int main(int, char **)
                         ImGui::SameLine();
                         if (sublist.refresh_future.valid()) {
                             using namespace std::chrono_literals;
-                            if (sublist.refresh_future.wait_for(0us) == std::future_status::ready) {
+                            if (sublist.refresh_future.wait_for(0us) == std::future_status::done) {
                                 (void) sublist.refresh_future.get();
                                 sublist.acquired = false;
                             } else
@@ -139,7 +134,7 @@ int main(int, char **)
                             if (result == std::future_status::timeout) {
                                 ImGui::TextUnformatted("(Querying...)");
                             }
-                            else if (result == std::future_status::ready) {
+                            else if (result == std::future_status::done) {
                                 sublist.packages_root = sublist.packages_future.get();
                                 sublist.acquired = true;
                             }
@@ -169,7 +164,7 @@ int main(int, char **)
                                     ImGui::TextWrapped("%s", description.c_str());
                                 }
                                 if (description.empty()) {
-                                    if (row.cargo.ready()) {                                   
+                                    if (row.cargo.done()) {                                   
                                         std::cout << "Obtained pkg info" << std::endl;
                                         // TODO: make this async
                                         sublist.acquired = false;

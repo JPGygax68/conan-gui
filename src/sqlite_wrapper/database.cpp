@@ -79,49 +79,6 @@ namespace SQLite {
         exec(statement.c_str(), "trying to upsert into package2");
     }
 
-    auto Database::get_package_designators(std::string_view name_filter) -> Package_designators
-    {
-        Package_designators list;
-        char *errmsg;
-
-        auto db_err = sqlite3_exec(db_handle, fmt::format(R"(
-            select distinct name, remote from packages2 where name like '{0}%';
-        )", name_filter).c_str(), [](void *list_, int coln, char *textv[], char *namev[]) -> int {
-            auto plst = static_cast<decltype(list)*>(list_);
-            plst->push_back({ .name = textv[0], .repository = textv[1] });
-            return 0;
-        }, &list, &errmsg);
-        if (db_err != 0) throw sqlite_error(db_handle, db_err, "trying to query packages");
-
-        return list;
-    }
-
-    // TODO: replace with setter that sets all important fields
-    void Database::set_package_description(std::string_view id, std::string_view description)
-    {
-        auto statement = fmt::format(R"(
-            insert into pkg_info (pkg_id, description, last_poll) values('{0}', '{1}', datetime('now'))
-            on conflict (pkg_id) do update set pkg_id='{0}', description='{1}', last_poll=datetime('now');
-        )", id, escape_single_quotes(description));
-
-        exec(statement.c_str(), "trying to upsert package_description into pkg_info");
-    }
-
-    // void Database::set_package_info(sqlite3_int64 pkg_id, const Package_info& info)
-    // {
-    //     // TODO (:PKG_ID, : DESCRIPTION, : LICENSE, : PROVIDES, : AUTHOR, : TOPICS, datetime('now'))
-    //     auto stmt = stmt_upsert_package_description;
-    //     int err = 0;
-    //     err = sqlite3_bind_int64(stmt, sqlite3_bind_parameter_index(stmt, "PKG_ID"     ), pkg_id);
-    //     err = sqlite3_bind_text (stmt, sqlite3_bind_parameter_index(stmt, "DESCRIPTION"), info.description.data(), info.description.size(), nullptr);
-    //     err = sqlite3_bind_text (stmt, sqlite3_bind_parameter_index(stmt, "LICENSE"    ), info.license    .data(), info.license    .size(), nullptr);
-    //     err = sqlite3_bind_text (stmt, sqlite3_bind_parameter_index(stmt, "PROVIDES"   ), info.provides   .data(), info.provides   .size(), nullptr);
-    //     err = sqlite3_bind_text (stmt, sqlite3_bind_parameter_index(stmt, "AUTHOR"     ), info.author     .data(), info.author     .size(), nullptr);
-    //     err = sqlite3_bind_text (stmt, sqlite3_bind_parameter_index(stmt, "TOPICS"     ), info.topics     .data(), info.topics     .size(), nullptr);
-    //     err = sqlite3_step(stmt);
-    //     if (err != SQLITE_DONE) throw sqlite_error(err, nullptr, "trying to execute prepared statement upsert_package_info");
-    // }
-
     auto Database::query_single_row(const char *list_query, const char *context) -> std::vector<std::string>
     {
         char *errmsg;
