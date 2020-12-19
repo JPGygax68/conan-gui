@@ -357,10 +357,10 @@ typedef struct
 //
 //     StbTexteditRow
 //
-// Result of layout query, used by stb_textedit to determine where
+// Result of layout list_query, used by stb_textedit to determine where
 // the text in each row is.
 
-// result of layout query
+// result of layout list_query
 typedef struct
 {
    float x0,x1;             // starting x location, end x location (allows for align=right, etc)

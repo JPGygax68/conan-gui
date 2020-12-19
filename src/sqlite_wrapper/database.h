@@ -147,6 +147,7 @@ namespace SQLite {
         ) -> sqlite3_stmt*;
 
         // Execute a prepared statement. Call repeatedly as long as it returns true, calling get_row() every time to get row contents.
+        // TODO: this is not ideal, as the parameters are only needed the first time.
         bool execute(sqlite3_stmt*, std::initializer_list<Value> values = {});
 
         void execute(std::string_view statement, std::string_view context = "");
@@ -161,7 +162,7 @@ namespace SQLite {
 
         static auto escape_single_quotes(std::string_view s) -> std::string;
 
-        auto query_single_row(const char *query, const char *context = nullptr) -> std::vector<std::string>;
+        auto query_single_row(const char *list_query, const char *context = nullptr) -> std::vector<std::string>;
 
         [[deprecated]]
         void exec(const char *statement, std::string_view context = "");

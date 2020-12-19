@@ -122,14 +122,14 @@ namespace SQLite {
     //     if (err != SQLITE_DONE) throw sqlite_error(err, nullptr, "trying to execute prepared statement upsert_package_info");
     // }
 
-    auto Database::query_single_row(const char *query, const char *context) -> std::vector<std::string>
+    auto Database::query_single_row(const char *list_query, const char *context) -> std::vector<std::string>
     {
         char *errmsg;
         int dberr;
 
         std::vector<std::string> output;
 
-        dberr = sqlite3_exec(db_handle, query, [](void* out_, int coln, char* textv[], char* namev[]) -> int {
+        dberr = sqlite3_exec(db_handle, list_query, [](void* out_, int coln, char* textv[], char* namev[]) -> int {
             auto& pout = *static_cast<decltype(output)*>(out_);
             for (auto i = 0; i < coln; i ++) pout.push_back(textv[i]);
             return 0;
@@ -306,7 +306,8 @@ namespace SQLite {
         int code = sqlite3_step(stmt);
         if      (code == SQLITE_ROW)  return true;
         else if (code == SQLITE_DONE) return false;
-        else throw sqlite_error(db_handle, code, "trying to step through prepared statement");
+        else 
+            throw sqlite_error(db_handle, code, "trying to step through prepared statement");
     }
 
     void Database::execute(std::string_view statement, std::string_view context)
@@ -340,6 +341,10 @@ namespace SQLite {
             }
             else if ("NULL"s == type)
                 row.push_back(Value{nullptr});
+            else if ("DATETIME"s == type) {
+                auto text = (const char*)sqlite3_column_text(stmt, i);
+                row.push_back(Value{ text ? text : "" });
+            }
             else 
                 assert(false);
         }

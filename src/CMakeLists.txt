@@ -13,6 +13,8 @@ add_executable(
 
   imgui_app.h imgui_app_vulkan.cpp
 
+  types.h
+
   repo_reader.cpp repo_reader.h
 
   alphabetic_tree.cpp alphabetic_tree.h

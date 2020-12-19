@@ -11,8 +11,7 @@
 
 namespace Conan {
     
-    Repository_reader::Repository_reader(SQLite::Database& db) : 
-        database{ db }
+    Repository_reader::Repository_reader()
     {
         remotes_ad.obtain([]() {
             auto file_ptr = _popen("conan remote list", "r");
@@ -71,18 +70,13 @@ namespace Conan {
         }
     }
 
-    auto Repository_reader::get_info(
-        std::string_view remote, 
-        std::string_view package, std::string_view version, 
-        std::string_view user, std::string_view channel,
-        int64_t pkg_id
-    ) -> Package_info
+    auto Repository_reader::get_info(const Package_key& key) -> Package_info
     {
-        std::string specifier = fmt::format("{0}/{1}@", package, version);
-        if (!user.empty()) specifier += fmt::format("{0}/{1}", user, channel);
+        std::string specifier = fmt::format("{0}/{1}@", key.package, key.version);
+        if (!key.user.empty()) specifier += fmt::format("{0}/{1}", key.user, key.channel);
             
         // auto cmd = fmt::format("conan info -r {0} {1}", remote, specifier);
-        auto cmd = fmt::format("conan inspect -r {0} {1}", remote, specifier);
+        auto cmd = fmt::format("conan inspect -r {0} {1}", key.remote, specifier);
         std::cout << "INSPECT command: " << cmd << std::endl;
         auto file_ptr = _popen(cmd.c_str(), "r");
         if (!file_ptr) throw std::system_error(errno, std::generic_category());

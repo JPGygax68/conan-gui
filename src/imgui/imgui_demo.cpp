@@ -1942,7 +1942,7 @@ static void ShowDemoWindowWidgets()
         ImGui::SameLine();
         HelpMarker("Testing how various types of items are interacting with the IsItemXXX functions.");
 
-        // Submit selected item item so we can query their status in the code following it.
+        // Submit selected item item so we can list_query their status in the code following it.
         bool ret = false;
         static bool b = false;
         static float col4f[4] = { 1.0f, 0.5, 0.0f, 1.0f };
@@ -1964,7 +1964,7 @@ static void ShowDemoWindowWidgets()
         // Display the values of IsItemHovered() and other common item state functions.
         // Note that the ImGuiHoveredFlags_XXX flags can be combined.
         // Because BulletText is an item itself and that would affect the output of IsItemXXX functions,
-        // we query every state in a single call to avoid storing them and to simplify the code.
+        // we list_query every state in a single call to avoid storing them and to simplify the code.
         ImGui::BulletText(
             "Return value = %d\n"
             "IsItemFocused() = %d\n"
@@ -2138,7 +2138,7 @@ static void ShowDemoWindowLayout()
         // - Using SetCursorPos() to position child window (the child window is an item from the POV of parent window)
         //   You can also call SetNextWindowPos() to position the child window. The parent window will effectively
         //   layout from this position.
-        // - Using ImGui::GetItemRectMin/Max() to query the "item" state (because the child window is an item from
+        // - Using ImGui::GetItemRectMin/Max() to list_query the "item" state (because the child window is an item from
         //   the POV of the parent window). See 'Demo->Querying Status (Active/Focused/Hovered etc.)' for details.
         {
             static int offset_x = 0;

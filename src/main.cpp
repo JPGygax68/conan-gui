@@ -74,7 +74,7 @@ int main(int, char **)
     try {
 
         Cache_db database;
-        Conan::Repository_reader repo_reader{ database };
+        Conan::Repository_reader repo_reader;
 
         std::future<void> queued_op;
         // auto tree = Package_tree{};
@@ -89,7 +89,7 @@ int main(int, char **)
             { "description", "license", "provides", "author", "topics" }
         );
 
-        Alphabetic_tree alphabetic_tree;
+        Alphabetic_tree alphabetic_tree{ repo_reader };
         alphabetic_tree.get_from_database();
 
         while (imgui_continue()) {

@@ -2,6 +2,7 @@
 #include <filesystem>
 #include <string>
 #include <regex>
+#include <fmt/format.h>
 #include "./cache_db.h"
 
 
@@ -33,14 +34,12 @@ Cache_db::Cache_db():
         SQLITE_UTF8 | SQLITE_DETERMINISTIC | SQLITE_DIRECTONLY,
         nullptr,
         [](sqlite3_context* context, int argc, sqlite3_value** argv) {
-            // TODO: improve to support a fourth part (after either a dash or another dot)
-            static const auto re = std::regex("^(\\d+)\\.(\\d+)\\.(\\d+)$");
-            // auto& re = *static_cast<std::regex*>(sqlite3_user_data(context));
+            static const auto re = std::regex("^(\\d+)\\.(\\d+)\\.(\\d+)(?:[\\.\\-](\\d+))$");
             if (argc == 2) {
                 std::smatch m;
                 std::string version{ (const char*)sqlite3_value_text(argv[0]) };
                 int index = sqlite3_value_int(argv[1]);
-                if (!(index >= 1 && index <= 3)) {
+                if (!(index >= 1 && index <= 4)) {
                     sqlite3_result_error(context, "The second parameter to SEMVER_PART() must be between 1 and 3", -1);
                     return;
                 }
@@ -53,6 +52,19 @@ Cache_db::Cache_db():
         },
         nullptr, nullptr
     );
+
+    get_pkg_info = prepare_statement(R"(
+        SELECT description, license, provides, author, topics, creation_date, last_poll
+        FROM pkg_info
+        WHERE pkg_id=?1
+    )");
+
+    upsert_pkg_info = prepare_upsert(
+        "pkg_info", 
+        { "pkg_id"}, 
+        { "description", "license", "provides", "author", "topics", "creation_date", "last_poll" }
+    );
+    // TODO: unprepare in dtor
 }
 
 void Cache_db::create_or_update()
@@ -221,4 +233,25 @@ void Cache_db::create_or_update()
     }();
 
 #endif
+}
+
+auto Cache_db::get_package_info(int64_t pkg_id) -> std::optional<Package_info>
+{
+    if (execute(get_pkg_info, { pkg_id })) {
+        auto row = get_row(get_pkg_info);
+        return Package_info {
+            .description   = std::get<3>(row[0]),
+            .license       = std::get<3>(row[1]),
+            .provides      = std::get<3>(row[2]),
+            .author        = std::get<3>(row[3]),
+            .topics        = std::get<3>(row[4]),
+            .creation_date = std::get<3>(row[5]),
+        };
+    }
+    return std::optional<Package_info>{};
+}
+
+void Cache_db::upsert_package_info(int64_t pkg_id, const Package_info& info)
+{
+    execute(upsert_pkg_info, { pkg_id, info.description, info.license, info.provides, info.author, info.topics, nullptr /* TODO */ });
 }
