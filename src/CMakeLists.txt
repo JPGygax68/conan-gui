@@ -43,4 +43,5 @@ target_link_libraries(
 
 if (DEFINED MSVC)
   target_link_libraries(${PROJECT_NAME} PRIVATE Shcore.lib)
+  target_link_options(${PROJECT_NAME} PRIVATE "/ignore:4099")
 endif()

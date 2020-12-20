@@ -77,11 +77,6 @@ int main(int, char **)
 
         std::future<void> queued_op;
 
-        {
-            Cache_db database;
-            database.create_or_update();
-        }
-
         imgui_init("Conan GUI");
 
         Alphabetic_tree alphabetic_tree{ repo_reader };

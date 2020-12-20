@@ -75,10 +75,6 @@ namespace SQLite {
         Database(const char *filename);
         ~Database();
 
-        void upsert_package(std::string_view remote, const std::string& reference);
-
-        void upsert_package2(std::string_view remote, std::string_view name, std::string_view version, std::string_view user, std::string_view channel);
-
         void select(const char* statement, select_callback);
 
         auto select(

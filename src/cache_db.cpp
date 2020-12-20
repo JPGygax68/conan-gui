@@ -53,6 +53,16 @@ Cache_db::Cache_db():
         nullptr, nullptr
     );
 
+    create_or_update();
+
+    get_list_stmt = prepare_statement(R"(
+        SELECT id, name, packages2.remote, user, channel, version, description, license, provides, author, topics FROM packages2
+        LEFT OUTER JOIN pkg_info ON pkg_info.pkg_id = packages2.id
+        WHERE name LIKE ?1
+        ORDER BY name COLLATE NOCASE ASC, packages2.remote COLLATE NOCASE ASC, user COLLATE NOCASE ASC, channel COLLATE NOCASE ASC,
+            SEMVER_PART(version, 1) DESC, SEMVER_PART(version, 2) DESC, SEMVER_PART(version, 3) DESC, SEMVER_PART(version, 4) DESC, version DESC
+    )");
+
     get_pkg_info = prepare_statement(R"(
         SELECT description, license, provides, author, topics, creation_date, last_poll
         FROM pkg_info
@@ -64,11 +74,11 @@ Cache_db::Cache_db():
         { "pkg_id"}, 
         { "description", "license", "provides", "author", "topics", "creation_date", "last_poll" }
     );
-    // TODO: unprepare in dtor
 }
 
 Cache_db::~Cache_db()
 {
+    sqlite3_finalize(get_list_stmt);
     sqlite3_finalize(get_pkg_info);
     sqlite3_finalize(upsert_pkg_info);
 }
@@ -76,8 +86,9 @@ Cache_db::~Cache_db()
 void Cache_db::create_or_update()
 {
     auto version = std::get<int64_t>(select_one("PRAGMA user_version")[0]);
-
     std::cout << "version: " << version << std::endl;
+
+    if (version >= 14) return;
 
     execute( R"(
 
@@ -112,6 +123,28 @@ void Cache_db::create_or_update()
 
     )", "trying to create packages2 table");
 }
+
+void Cache_db::get_list(std::function<bool(SQLite::Row)> row_cb, std::string_view name_filter)
+{
+    while (execute(get_list_stmt, { std::string{name_filter} })) {
+        auto row = get_row(get_list_stmt);
+        if (!row_cb(row)) break;
+    }
+}
+
+void Cache_db::upsert_package(std::string_view remote, std::string_view name, std::string_view version, std::string_view user, std::string_view channel)
+{
+    // TODO: use prepared statement!
+
+    auto statement = fmt::format(R"(
+        INSERT INTO packages2 (remote, name, version, user, channel, last_poll)
+            values('{0}', '{1}', '{2}', '{3}', '{4}', datetime('now'))
+        ON CONFLICT (remote, name, version, user, channel) DO UPDATE SET last_poll=datetime('now');
+    )", remote, name, version, user, channel);
+
+    execute(statement.c_str(), "trying to upsert into package2");
+}
+
 
 auto Cache_db::get_package_info(int64_t pkg_id) -> std::optional<Package_info>
 {

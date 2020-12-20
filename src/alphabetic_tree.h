@@ -16,8 +16,13 @@ struct Alphabetic_tree {
     struct Channel_node;
     struct Version_node;
 
+    using Package_list = std::map<std::string, Package_variants_node>;
+
     struct Letter_node {
-        std::map<std::string, Package_variants_node> packages;
+        Package_list packages;
+        std::future<void> scan;     // Repo Reader
+        std::future<void> fetch;    // Cache DB
+        Package_list temp_packages;
     };
 
     struct Package_variants_node {
@@ -51,6 +56,8 @@ struct Alphabetic_tree {
     void draw();
 
 private:
+
+    void add_row_to_package_list(Package_list& pkg_list, const SQLite::Row& row);
 
     void draw_letter_node(char letter, Letter_node& node);
     void draw_package_variants(const char* pkg_name, Package_variants_node& node);

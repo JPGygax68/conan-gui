@@ -1,4 +1,5 @@
 #include <ctype.h>
+#include <fmt/format.h>
 #include <imgui.h>
 #include "./repo_reader.h"
 #include "./alphabetic_tree.h"
@@ -31,13 +32,7 @@ void Alphabetic_tree::get_from_database()
         auto row = database.get_row(list_query);
         auto ch = toupper(std::get<3>(row[1])[0]);
         auto& letter  = root[ch];
-        auto& package = letter .packages[std::get<3>(row[1])];
-        auto& remote  = package.remotes [std::get<3>(row[2])];
-        auto& user    = remote .users   [std::get<3>(row[3])];
-        auto& channel = user   .channels[std::get<3>(row[4])];
-        auto& version = channel.versions[std::get<3>(row[5])];
-        version.description = std::get<3>(row[6]);
-        version.pkg_id = std::get<1>(row[0]);
+        add_row_to_package_list(letter.packages, row);
     }
 }
 
@@ -48,9 +43,64 @@ void Alphabetic_tree::draw()
     }
 }
 
+void Alphabetic_tree::add_row_to_package_list(Package_list& pkg_list, const SQLite::Row& row)
+{
+    auto& package = pkg_list        [std::get<3>(row[1])];
+    auto& remote  = package.remotes [std::get<3>(row[2])];
+    auto& user    = remote .users   [std::get<3>(row[3])];
+    auto& channel = user   .channels[std::get<3>(row[4])];
+    auto& version = channel.versions[std::get<3>(row[5])];
+
+    version.description = std::get<3>(row[6]);
+    version.pkg_id = std::get<1>(row[0]);
+}
+
 void Alphabetic_tree::draw_letter_node(char letter, Letter_node& node)
 {
-    if (ImGui::TreeNode(std::string{letter}.c_str())) {
+    using namespace std::chrono_literals;
+
+    ImGui::AlignTextToFramePadding();
+    auto open = ImGui::TreeNode(std::string{letter}.c_str());
+    ImGui::SameLine();
+
+    if (node.scan.valid()) {
+        if (node.scan.wait_for(0s) == std::future_status::ready) {
+            (void)node.scan.get();
+            node.temp_packages.clear(); // just in case
+            node.fetch = std::async(
+                std::launch::async,
+                [this, letter, &node]() {
+                    Cache_db db;
+                    db.get_list(
+                        [this, &node](SQLite::Row row) {
+                            add_row_to_package_list(node.temp_packages, row);
+                            return true;
+                        },
+                        fmt::format("{0}%", letter)
+                    );     
+                }
+            );
+        }
+    }
+    if (!node.scan.valid()) {
+        if (ImGui::Button("Re-scan")) {
+            node.scan = std::async(
+                std::launch::async, 
+                [this, letter]() { repo_reader.read_letter_all_repositories(letter); }
+            );
+        }
+    }
+    else 
+        ImGui::TextUnformatted("(scanning...)");
+
+    if (node.fetch.valid()) {
+        if (node.fetch.wait_for(0s) == std::future_status::ready) {
+            (void)node.fetch.get();
+            node.packages = std::move(node.temp_packages);
+        }
+    }
+
+    if (open) {
         for (auto& it : node.packages) {
             package = it.first;
             draw_package_variants(it.first.c_str(), it.second);
