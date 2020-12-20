@@ -39,7 +39,7 @@ struct Alphabetic_tree {
     struct Version_node {
         uint64_t pkg_id = 0;
         std::string description;
-        async_data<Package_info> pkg_info_ad;
+        async_data<Package_info> pkg_info;
     };
 
     std::map<char, Letter_node> root;

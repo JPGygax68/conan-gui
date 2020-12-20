@@ -59,9 +59,9 @@ namespace SQLite {
         int db_err;
 
         auto statement = fmt::format(R"(
-            insert into packages (remote, reference, last_poll)
+            INSERT INTO packages (remote, reference, last_poll)
                 values('{0}', '{1}', datetime('now'))
-            on conflict (remote, reference) do update set last_poll=datetime('now');
+            ON CONFLICT (remote, reference) DO UPDATE SET last_poll=datetime('now');
         )", remote, reference);
         db_err = sqlite3_exec(db_handle, statement.c_str(), nullptr, nullptr, &errmsg);
 
@@ -71,9 +71,9 @@ namespace SQLite {
     void Database::upsert_package2(std::string_view remote, std::string_view name, std::string_view version, std::string_view user, std::string_view channel)
     {
         auto statement = fmt::format(R"(
-            insert into packages2 (remote, name, version, user, channel, last_poll)
+            INSERT INTO packages2 (remote, name, version, user, channel, last_poll)
                 values('{0}', '{1}', '{2}', '{3}', '{4}', datetime('now'))
-            on conflict (remote, name, version, user, channel) do update set last_poll=datetime('now');
+            ON CONFLICT (remote, name, version, user, channel) DO UPDATE SET last_poll=datetime('now');
         )", remote, name, version, user, channel);
 
         exec(statement.c_str(), "trying to upsert into package2");

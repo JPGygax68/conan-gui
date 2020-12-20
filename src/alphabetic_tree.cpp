@@ -12,7 +12,7 @@ Alphabetic_tree::Alphabetic_tree(Conan::Repository_reader& rr):
         SELECT id, name, packages2.remote, user, channel, version, description, license, provides, author, topics FROM packages2
         LEFT OUTER JOIN pkg_info ON pkg_info.pkg_id = packages2.id
         ORDER BY name COLLATE NOCASE ASC, packages2.remote COLLATE NOCASE ASC, user COLLATE NOCASE ASC, channel COLLATE NOCASE ASC,
-            SEMVER_PART(version, 1) DESC, SEMVER_PART(version, 2) DESC, SEMVER_PART(version, 3) DESC, SEMVER_PART(version, 4), version DESC
+            SEMVER_PART(version, 1) DESC, SEMVER_PART(version, 2) DESC, SEMVER_PART(version, 3) DESC, SEMVER_PART(version, 4) DESC, version DESC
     )");
 
     // TODO: move to Cache_db
@@ -113,21 +113,21 @@ void Alphabetic_tree::draw_version(const char* name, Version_node& node)
     ImGui::SameLine();
 
     auto requery = false;
-    if (node.pkg_info_ad.busy() && !node.pkg_info_ad.ready()) {
+    if (node.pkg_info.busy() && !node.pkg_info.ready()) {
         ImGui::TextUnformatted("(Querying...)");
     }
     else {
         requery = ImGui::Button("Re-query");
         if (requery)
-            node.pkg_info_ad.reset();
+            node.pkg_info.reset();
     }
 
     ImGui::SameLine();
     ImGui::TextUnformatted(node.description.c_str());
 
-    if (requery || open && !node.pkg_info_ad.ready()) {
-        if (node.pkg_info_ad.blank()) {
-            node.pkg_info_ad.obtain(
+    if (requery || open && !node.pkg_info.ready()) {
+        if (node.pkg_info.blank()) {
+            node.pkg_info.obtain(
                 [this, &node](const Package_key key, int64_t pkg_id, bool requery) {
                     Cache_db db;
                     std::optional<Package_info> info;
@@ -149,8 +149,8 @@ void Alphabetic_tree::draw_version(const char* name, Version_node& node)
     }
 
     if (open) {
-        if (node.pkg_info_ad.ready()) {
-            const auto& info = node.pkg_info_ad.value();
+        if (node.pkg_info.ready()) {
+            const auto& info = node.pkg_info.value();
             ImGui::Text("License: %s", info.license.c_str());
         }
         else {
