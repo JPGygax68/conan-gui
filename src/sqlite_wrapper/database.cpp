@@ -43,7 +43,7 @@ namespace SQLite {
 
         std::filesystem::create_directories(path{filename}.parent_path());
 
-        auto db_err = sqlite3_open(filename, &db_handle);
+        auto db_err = sqlite3_open_v2(filename, &db_handle, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_NOMUTEX, nullptr);
         if (db_err != SQLITE_OK) throw sqlite_error(db_handle, db_err, "trying to open/create database");
     }
 
@@ -226,7 +226,7 @@ namespace SQLite {
             extra_setters.push_back(fmt::format("{0}=?{1}", col, i));
         }
 
-        auto statement = fmt::format("INSERT INTO {0} ({1}) VALUES({2}) ON CONFLICT({3}) DO UPDATE SET {4}",
+        auto statement = fmt::format("INSERT INTO {0} ({1}) VALUES({2}) ON CONFLICT({3}) DO UPDATE SET {4};",
             /* 0 */ table,
             /* 1 */ join_strings(all_columns, ", "),
             /* 2 */ join_strings(all_placeholders, ", "),
@@ -310,7 +310,7 @@ namespace SQLite {
 
     void Database::drop_table(std::string_view name)
     {
-        exec(fmt::format("drop table if exists {0}", name).c_str(), fmt::format("trying to drop table \"{0}\"", name));
+        exec(fmt::format("drop table if exists {0};", name).c_str(), fmt::format("trying to drop table \"{0}\"", name));
     }
 
     auto Database::escape_single_quotes(std::string_view s) -> std::string

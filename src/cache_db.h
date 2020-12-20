@@ -8,6 +8,7 @@
 class Cache_db: public SQLite::Database {
 public:
     Cache_db();
+    ~Cache_db();
 
     void create_or_update();
 

@@ -105,8 +105,9 @@ void Alphabetic_tree::draw_channel(const char* name, Channel_node& node)
 
 void Alphabetic_tree::draw_version(const char* name, Version_node& node)
 {
-    ImGui::AlignTextToFramePadding();
+    ImGui::PushID(name);
 
+    ImGui::AlignTextToFramePadding();
     auto open = ImGui::TreeNode(name);
 
     ImGui::SameLine();
@@ -158,4 +159,5 @@ void Alphabetic_tree::draw_version(const char* name, Version_node& node)
         ImGui::TreePop();
     }
 
+    ImGui::PopID();
 }

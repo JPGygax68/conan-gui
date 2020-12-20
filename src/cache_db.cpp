@@ -56,7 +56,7 @@ Cache_db::Cache_db():
     get_pkg_info = prepare_statement(R"(
         SELECT description, license, provides, author, topics, creation_date, last_poll
         FROM pkg_info
-        WHERE pkg_id=?1
+        WHERE pkg_id=?1;
     )");
 
     upsert_pkg_info = prepare_upsert(
@@ -65,6 +65,12 @@ Cache_db::Cache_db():
         { "description", "license", "provides", "author", "topics", "creation_date", "last_poll" }
     );
     // TODO: unprepare in dtor
+}
+
+Cache_db::~Cache_db()
+{
+    sqlite3_finalize(get_pkg_info);
+    sqlite3_finalize(upsert_pkg_info);
 }
 
 void Cache_db::create_or_update()

@@ -143,7 +143,7 @@ namespace SQLite {
         sqlite3_stmt    *stmt_upsert_package_description = nullptr;
     };
 
-} // ns Conan
+} // ns SQLite
 
 
 // Inline implementations
