@@ -72,8 +72,8 @@ namespace Conan {
 
     auto Repository_reader::get_info(const Package_key& key) -> Package_info
     {
-        std::string specifier = fmt::format("{0}/{1}@", key.package, key.version);
-        if (!key.user.empty()) specifier += fmt::format("{0}/{1}", key.user, key.channel);
+        std::string specifier = fmt::format("{0}/{1}@", key.reference.package, key.reference.version);
+        if (!key.reference.user.empty()) specifier += fmt::format("{0}/{1}", key.reference.user, key.reference.channel);
             
         // auto cmd = fmt::format("conan info -r {0} {1}", remote, specifier);
         auto cmd = fmt::format("conan inspect -r {0} {1}", key.remote, specifier);

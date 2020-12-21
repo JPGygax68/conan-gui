@@ -34,7 +34,7 @@ Cache_db::Cache_db():
         SQLITE_UTF8 | SQLITE_DETERMINISTIC | SQLITE_DIRECTONLY,
         nullptr,
         [](sqlite3_context* context, int argc, sqlite3_value** argv) {
-            static const auto re = std::regex("^(\\d+)\\.(\\d+)\\.(\\d+)(?:[\\.\\-](\\d+))$");
+            static const auto re = std::regex("^(\\d+)\\.(\\d+)(?:\\.(\\d+)(?:[\\.\\-](\\d+))?)?$");
             if (argc == 2) {
                 std::smatch m;
                 std::string version{ (const char*)sqlite3_value_text(argv[0]) };
@@ -44,7 +44,9 @@ Cache_db::Cache_db():
                     return;
                 }
                 if (std::regex_match(version, m, re)) {
-                    sqlite3_result_int(context, std::stoi(m[index]));
+                    auto value = m[index].matched ? std::stoi(m[index]) : 0;
+                    // std::cout << version << " [" << index << "]: " << value << std::endl;
+                    sqlite3_result_int(context, value);
                     return;
                 }
             }
@@ -56,11 +58,12 @@ Cache_db::Cache_db():
     create_or_update();
 
     get_list_stmt = prepare_statement(R"(
-        SELECT id, name, packages2.remote, user, channel, version, description, license, provides, author, topics FROM packages2
+        SELECT id, name, packages2.remote, user, channel, version, description, license, provides, author, topics 
+        FROM packages2
         LEFT OUTER JOIN pkg_info ON pkg_info.pkg_id = packages2.id
         WHERE name LIKE ?1
-        ORDER BY name COLLATE NOCASE ASC, packages2.remote COLLATE NOCASE ASC, user COLLATE NOCASE ASC, channel COLLATE NOCASE ASC,
-            SEMVER_PART(version, 1) DESC, SEMVER_PART(version, 2) DESC, SEMVER_PART(version, 3) DESC, SEMVER_PART(version, 4) DESC, version DESC
+        ORDER BY SUBSTR(name, 1, 1) COLLATE NOCASE ASC, name ASC, packages2.remote ASC, user ASC, channel ASC,
+            SEMVER_PART(version, 1) DESC, SEMVER_PART(version, 2) DESC, SEMVER_PART(version, 3) DESC, SEMVER_PART(version, 4) DESC
     )");
 
     get_pkg_info = prepare_statement(R"(
@@ -128,6 +131,7 @@ void Cache_db::get_list(std::function<bool(SQLite::Row)> row_cb, std::string_vie
 {
     while (execute(get_list_stmt, { std::string{name_filter} })) {
         auto row = get_row(get_list_stmt);
+        std::cout << std::get<3>(row[1]) << std::endl;
         if (!row_cb(row)) break;
     }
 }

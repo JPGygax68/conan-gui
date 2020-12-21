@@ -1,3 +1,4 @@
+#include <iostream>
 #include <ctype.h>
 #include <fmt/format.h>
 #include <imgui.h>
@@ -8,14 +9,6 @@
 Alphabetic_tree::Alphabetic_tree(Conan::Repository_reader& rr):
     repo_reader{rr}
 {
-    // TODO: move to Cache_db
-    list_query = database.prepare_statement(R"(
-        SELECT id, name, packages2.remote, user, channel, version, description, license, provides, author, topics FROM packages2
-        LEFT OUTER JOIN pkg_info ON pkg_info.pkg_id = packages2.id
-        ORDER BY name COLLATE NOCASE ASC, packages2.remote COLLATE NOCASE ASC, user COLLATE NOCASE ASC, channel COLLATE NOCASE ASC,
-            SEMVER_PART(version, 1) DESC, SEMVER_PART(version, 2) DESC, SEMVER_PART(version, 3) DESC, SEMVER_PART(version, 4) DESC, version DESC
-    )");
-
     // TODO: move to Cache_db
     info_query = database.prepare_statement(R"(
         SELECT remote, url, license, description, provides, author, topics, creation_date, last_poll
@@ -28,12 +21,15 @@ void Alphabetic_tree::get_from_database()
 {
     root.clear();
 
-    while (database.execute(list_query)) {
-        auto row = database.get_row(list_query);
-        auto ch = toupper(std::get<3>(row[1])[0]);
-        auto& letter  = root[ch];
-        add_row_to_package_list(letter.packages, row);
-    }
+    database.get_list(
+        [this](SQLite::Row row) {
+            auto ch = std::get<3>(row[1])[0];
+            auto ch_uc = toupper(ch);
+            auto& letter = root[ch_uc];
+            add_row_to_package_list(letter.references, row);
+            return true;
+        }
+    );
 }
 
 void Alphabetic_tree::draw()
@@ -43,13 +39,13 @@ void Alphabetic_tree::draw()
     }
 }
 
-void Alphabetic_tree::add_row_to_package_list(Package_list& pkg_list, const SQLite::Row& row)
+void Alphabetic_tree::add_row_to_package_list(References_list& pkg_list, const SQLite::Row& row)
 {
-    auto& package = pkg_list        [std::get<3>(row[1])];
-    auto& remote  = package.remotes [std::get<3>(row[2])];
-    auto& user    = remote .users   [std::get<3>(row[3])];
-    auto& channel = user   .channels[std::get<3>(row[4])];
-    auto& version = channel.versions[std::get<3>(row[5])];
+    auto& package = pkg_list        [std::get<3>(row[1])];  // col 1: package name
+    auto& remote  = package.remotes [std::get<3>(row[2])];  // col 2: remote
+    auto& user    = remote .users   [std::get<3>(row[3])];  // col 3: user
+    auto& channel = user   .channels[std::get<3>(row[4])];  // col 4: channel
+    auto& version = channel.versions[std::get<3>(row[5])];  // col 5: version string
 
     version.description = std::get<3>(row[6]);
     version.pkg_id = std::get<1>(row[0]);
@@ -96,12 +92,12 @@ void Alphabetic_tree::draw_letter_node(char letter, Letter_node& node)
     if (node.fetch.valid()) {
         if (node.fetch.wait_for(0s) == std::future_status::ready) {
             (void)node.fetch.get();
-            node.packages = std::move(node.temp_packages);
+            node.references = std::move(node.temp_packages);
         }
     }
 
     if (open) {
-        for (auto& it : node.packages) {
+        for (auto& it : node.references) {
             package = it.first;
             draw_package_variants(it.first.c_str(), it.second);
         }
@@ -109,7 +105,7 @@ void Alphabetic_tree::draw_letter_node(char letter, Letter_node& node)
     }
 }
 
-void Alphabetic_tree::draw_package_variants(const char* pkg_name, Package_variants_node& node)
+void Alphabetic_tree::draw_package_variants(const char* pkg_name, Reference_node& node)
 {
     if (ImGui::TreeNode(pkg_name)) {
         for (auto& it : node.remotes) {

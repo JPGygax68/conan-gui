@@ -10,31 +10,31 @@
 
 struct Alphabetic_tree {
 
-    struct Package_variants_node;
+    struct Reference_node;
     struct Remote_node;
     struct User_node;
     struct Channel_node;
     struct Version_node;
 
-    using Package_list = std::map<std::string, Package_variants_node>;
+    using References_list = std::map<std::string, Reference_node>;
 
     struct Letter_node {
-        Package_list packages;
+        References_list references;
         std::future<void> scan;     // Repo Reader
         std::future<void> fetch;    // Cache DB
-        Package_list temp_packages;
+        References_list temp_packages;
     };
 
-    struct Package_variants_node {
-        std::map<std::string, Remote_node> remotes;
+    struct Reference_node {
+        std::unordered_map<std::string, Remote_node> remotes;
     };
 
     struct Remote_node {
-        std::map<std::string, User_node> users;
+        std::unordered_map<std::string, User_node> users;
     };
 
     struct User_node {
-        std::map<std::string, Channel_node> channels;
+        std::unordered_map<std::string, Channel_node> channels;
     };
 
     struct Channel_node {
@@ -42,12 +42,13 @@ struct Alphabetic_tree {
     };
 
     struct Version_node {
+        // TODO: in Conan parlance, what I called a "version" here is called a "package"
         uint64_t pkg_id = 0;
         std::string description;
         async_data<Package_info> pkg_info;
     };
 
-    std::map<char, Letter_node> root;
+    std::unordered_map<char, Letter_node> root;
 
     explicit Alphabetic_tree(Conan::Repository_reader&);
 
@@ -57,10 +58,10 @@ struct Alphabetic_tree {
 
 private:
 
-    void add_row_to_package_list(Package_list& pkg_list, const SQLite::Row& row);
+    void add_row_to_package_list(References_list& pkg_list, const SQLite::Row& row);
 
     void draw_letter_node(char letter, Letter_node& node);
-    void draw_package_variants(const char* pkg_name, Package_variants_node& node);
+    void draw_package_variants(const char* pkg_name, Reference_node& node);
     void draw_remote(const char* name, Remote_node& node);
     void draw_user(const char* name, User_node& node);
     void draw_channel(const char* name, Channel_node& node);
@@ -68,7 +69,6 @@ private:
 
     Conan::Repository_reader&   repo_reader;
     Cache_db                    database;
-    sqlite3_stmt*               list_query = nullptr; // TODO: move to Cache_db 
     sqlite3_stmt*               info_query = nullptr; // ditto
 
     std::string                 remote, package, user, channel, version;
