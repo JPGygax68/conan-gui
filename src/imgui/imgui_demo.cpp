@@ -1130,11 +1130,11 @@ static void ShowDemoWindowWidgets()
                 for (int x = 0; x < 3; x++)
                 {
                     ImVec2 alignment = ImVec2((float)x / 2.0f, (float)y / 2.0f);
-                    char name[32];
-                    sprintf(name, "(%.1f,%.1f)", alignment.x, alignment.y);
+                    char version[32];
+                    sprintf(version, "(%.1f,%.1f)", alignment.x, alignment.y);
                     if (x > 0) ImGui::SameLine();
                     ImGui::PushStyleVar(ImGuiStyleVar_SelectableTextAlign, alignment);
-                    ImGui::Selectable(name, &selected[3 * y + x], ImGuiSelectableFlags_None, ImVec2(80, 80));
+                    ImGui::Selectable(version, &selected[3 * y + x], ImGuiSelectableFlags_None, ImVec2(80, 80));
                     ImGui::PopStyleVar();
                 }
             }
@@ -2408,11 +2408,11 @@ static void ShowDemoWindowLayout()
                 for (int n = 0; n < active_tabs.Size; )
                 {
                     bool open = true;
-                    char name[16];
-                    snprintf(name, IM_ARRAYSIZE(name), "%04d", active_tabs[n]);
-                    if (ImGui::BeginTabItem(name, &open, ImGuiTabItemFlags_None))
+                    char version[16];
+                    snprintf(version, IM_ARRAYSIZE(version), "%04d", active_tabs[n]);
+                    if (ImGui::BeginTabItem(version, &open, ImGuiTabItemFlags_None))
                     {
-                        ImGui::Text("This is the %s tab!", name);
+                        ImGui::Text("This is the %s tab!", version);
                         ImGui::EndTabItem();
                     }
 
@@ -3060,14 +3060,14 @@ static void ShowDemoWindowPopups()
         // BeginPopupContextItem() will use the last item ID as the popup ID.
         // In addition here, we want to include your editable label inside the button label.
         // We use the ### operator to override the ID (read FAQ about ID for details)
-        static char name[32] = "Label1";
+        static char version[32] = "Label1";
         char buf[64];
-        sprintf(buf, "Button: %s###Button", name); // ### operator override ID ignoring the preceding label
+        sprintf(buf, "Button: %s###Button", version); // ### operator override ID ignoring the preceding label
         ImGui::Button(buf);
         if (ImGui::BeginPopupContextItem())
         {
             ImGui::Text("Edit name:");
-            ImGui::InputText("##edit", name, IM_ARRAYSIZE(name));
+            ImGui::InputText("##edit", version, IM_ARRAYSIZE(version));
             if (ImGui::Button("Close"))
                 ImGui::CloseCurrentPopup();
             ImGui::EndPopup();
@@ -3957,10 +3957,10 @@ void ImGui::ShowStyleEditor(ImGuiStyle* ref)
                 for (int i = 0; i < ImGuiCol_COUNT; i++)
                 {
                     const ImVec4& col = style.Colors[i];
-                    const char* name = ImGui::GetStyleColorName(i);
+                    const char* version = ImGui::GetStyleColorName(i);
                     if (!output_only_modified || memcmp(&col, &ref->Colors[i], sizeof(ImVec4)) != 0)
                         ImGui::LogText("colors[ImGuiCol_%s]%*s= ImVec4(%.2ff, %.2ff, %.2ff, %.2ff);" IM_NEWLINE,
-                            name, 23 - (int)strlen(name), "", col.x, col.y, col.z, col.w);
+                            version, 23 - (int)strlen(version), "", col.x, col.y, col.z, col.w);
                 }
                 ImGui::LogFinish();
             }
@@ -3983,8 +3983,8 @@ void ImGui::ShowStyleEditor(ImGuiStyle* ref)
             ImGui::PushItemWidth(-160);
             for (int i = 0; i < ImGuiCol_COUNT; i++)
             {
-                const char* name = ImGui::GetStyleColorName(i);
-                if (!filter.PassFilter(name))
+                const char* version = ImGui::GetStyleColorName(i);
+                if (!filter.PassFilter(version))
                     continue;
                 ImGui::PushID(i);
                 ImGui::ColorEdit4("##color", (float*)&style.Colors[i], ImGuiColorEditFlags_AlphaBar | alpha_flags);
@@ -3997,7 +3997,7 @@ void ImGui::ShowStyleEditor(ImGuiStyle* ref)
                     ImGui::SameLine(0.0f, style.ItemInnerSpacing.x); if (ImGui::Button("Revert")) { style.Colors[i] = ref->Colors[i]; }
                 }
                 ImGui::SameLine(0.0f, style.ItemInnerSpacing.x);
-                ImGui::TextUnformatted(name);
+                ImGui::TextUnformatted(version);
                 ImGui::PopID();
             }
             ImGui::PopItemWidth();
@@ -4178,12 +4178,12 @@ static void ShowExampleMenuFile()
         float sz = ImGui::GetTextLineHeight();
         for (int i = 0; i < ImGuiCol_COUNT; i++)
         {
-            const char* name = ImGui::GetStyleColorName((ImGuiCol)i);
+            const char* version = ImGui::GetStyleColorName((ImGuiCol)i);
             ImVec2 p = ImGui::GetCursorScreenPos();
             ImGui::GetWindowDrawList()->AddRectFilled(p, ImVec2(p.x + sz, p.y + sz), ImGui::GetColorU32((ImGuiCol)i));
             ImGui::Dummy(ImVec2(sz, sz));
             ImGui::SameLine();
-            ImGui::MenuItem(name);
+            ImGui::MenuItem(version);
         }
         ImGui::EndMenu();
     }
@@ -5320,9 +5320,9 @@ struct MyDocument
     bool        WantClose;  // Set when the document
     ImVec4      Color;      // An arbitrary variable associated to the document
 
-    MyDocument(const char* name, bool open = true, const ImVec4& color = ImVec4(1.0f, 1.0f, 1.0f, 1.0f))
+    MyDocument(const char* version, bool open = true, const ImVec4& color = ImVec4(1.0f, 1.0f, 1.0f, 1.0f))
     {
-        Name = name;
+        Name = version;
         Open = OpenPrev = open;
         Dirty = false;
         WantClose = false;

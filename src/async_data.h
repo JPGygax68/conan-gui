@@ -9,6 +9,14 @@
 template <typename T>
 struct async_data {
 
+    explicit async_data(async_data&& src):
+        _done{ src._done },
+        _future{ std::move(src._future) },
+        _result{std::move(src._result)}
+    {}
+
+    async_data() = default;
+
     bool ready() {
         if (_done) return true;
         _check_future();

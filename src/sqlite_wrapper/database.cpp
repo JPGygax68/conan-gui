@@ -282,9 +282,9 @@ namespace SQLite {
         return row;
     }
 
-    void Database::drop_table(std::string_view name)
+    void Database::drop_table(std::string_view version)
     {
-        exec(fmt::format("drop table if exists {0};", name).c_str(), fmt::format("trying to drop table \"{0}\"", name));
+        exec(fmt::format("drop table if exists {0};", version).c_str(), fmt::format("trying to drop table \"{0}\"", version));
     }
 
     auto Database::escape_single_quotes(std::string_view s) -> std::string

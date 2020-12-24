@@ -133,7 +133,7 @@ namespace SQLite {
 
         auto insert(std::string_view table, std::string_view columns, std::string_view values) -> int64_t;
 
-        void drop_table(std::string_view name);
+        void drop_table(std::string_view version);
 
         sqlite3         *db_handle = nullptr;
         sqlite3_stmt    *stmt_upsert_package_description = nullptr;

@@ -22,9 +22,9 @@ namespace Conan {
                 if (fgets(buffer, sizeof(buffer), file_ptr)) {
                     std::string input = buffer;
                     input.erase(std::remove(input.begin(), input.end(), '\n'), input.end());
-                    auto name = input.substr(0, input.find(":"));
-                    std::cout << name << std::endl; // TODO: replace with log
-                    list.push_back(name);
+                    auto version = input.substr(0, input.find(":"));
+                    std::cout << version << std::endl; // TODO: replace with log
+                    list.push_back(version);
                 }
             }
             fclose(file_ptr);

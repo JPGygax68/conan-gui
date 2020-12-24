@@ -1,4 +1,6 @@
 #include <iostream>
+#include <ranges>
+#include <algorithm>
 #include <ctype.h>
 #include <fmt/format.h>
 #include <imgui.h>
@@ -21,12 +23,15 @@ void Alphabetic_tree::get_from_database()
 {
     root.clear();
 
+    SQLite::Row prev_row = { {" "}, {" "}, {" "}, {" "}, {" "}, {" "} };
+
     database.get_list(
-        [this](SQLite::Row row) {
+        [this, &prev_row](SQLite::Row row) {
             auto ch = std::get<3>(row[1])[0];
             auto ch_uc = toupper(ch);
             auto& letter = root[ch_uc];
-            add_row_to_package_list(letter.references, row);
+            add_row_to_references_list(letter.references, row, prev_row);
+            prev_row = row;
             return true;
         }
     );
@@ -39,16 +44,35 @@ void Alphabetic_tree::draw()
     }
 }
 
-void Alphabetic_tree::add_row_to_package_list(References_list& pkg_list, const SQLite::Row& row)
+void Alphabetic_tree::add_row_to_references_list(References_list& ref_list, const SQLite::Row& row, const SQLite::Row& prev_row)
 {
-    auto& package = pkg_list        [std::get<3>(row[1])];  // col 1: package name
-    auto& remote  = package.remotes [std::get<3>(row[2])];  // col 2: remote
-    auto& user    = remote .users   [std::get<3>(row[3])];  // col 3: user
-    auto& channel = user   .channels[std::get<3>(row[4])];  // col 4: channel
-    auto& version = channel.versions[std::get<3>(row[5])];  // col 5: version string
+    auto& reference = std::get<3>(row[1]);
+    auto& remote    = std::get<3>(row[2]);
+    auto& user      = std::get<3>(row[3]);
+    auto& channel   = std::get<3>(row[4]);
+    auto& version   = std::get<3>(row[5]);
 
-    version.description = std::get<3>(row[6]);
-    version.pkg_id = std::get<1>(row[0]);
+    bool changed = false;
+    if (reference != std::get<3>(prev_row[1])) changed = true;
+    if (changed) ref_list.push_back({ reference, Reference_node{} });
+    auto& remote_list = ref_list.back().second.remotes;
+    changed = changed || remote != std::get<3>(prev_row[2]);
+    if (changed) remote_list.push_back({ remote, Remote_node{} });
+    auto& user_list = remote_list.back().second.users;
+    changed = changed || user != std::get<3>(prev_row[3]);
+    if (changed) user_list.push_back({ user, User_node{} });
+    auto& channel_list = user_list.back().second.channels;
+    changed = changed || channel != std::get<3>(prev_row[4]);
+    if (changed) channel_list.push_back({ channel, Channel_node() });
+    auto& package_list = channel_list.back().second.packages;
+    changed = changed || version != std::get<3>(prev_row[5]);
+    if (changed) package_list.push_back({});
+
+    auto& package_node = package_list.back();
+
+    package_node.pkg_id = std::get<1>(row[0]);
+    package_node.version = version;
+    package_node.description = std::get<3>(row[6]);
 }
 
 void Alphabetic_tree::draw_letter_node(char letter, Letter_node& node)
@@ -67,9 +91,11 @@ void Alphabetic_tree::draw_letter_node(char letter, Letter_node& node)
                 std::launch::async,
                 [this, letter, &node]() {
                     Cache_db db;
+                    SQLite::Row prev_row = { {" "}, {" "}, {" "}, {" "}, {" "}, {" "} };
                     db.get_list(
-                        [this, &node](SQLite::Row row) {
-                            add_row_to_package_list(node.temp_packages, row);
+                        [this, &node, &prev_row](SQLite::Row row) {
+                            add_row_to_references_list(node.temp_packages, row, prev_row);
+                            prev_row = row;
                             return true;
                         },
                         fmt::format("{0}%", letter)
@@ -99,13 +125,13 @@ void Alphabetic_tree::draw_letter_node(char letter, Letter_node& node)
     if (open) {
         for (auto& it : node.references) {
             package = it.first;
-            draw_package_variants(it.first.c_str(), it.second);
+            draw_reference(it.first.c_str(), it.second);
         }
         ImGui::TreePop();
     }
 }
 
-void Alphabetic_tree::draw_package_variants(const char* pkg_name, Reference_node& node)
+void Alphabetic_tree::draw_reference(const char* pkg_name, Reference_node& node)
 {
     if (ImGui::TreeNode(pkg_name)) {
         for (auto& it : node.remotes) {
@@ -116,9 +142,9 @@ void Alphabetic_tree::draw_package_variants(const char* pkg_name, Reference_node
     }
 }
 
-void Alphabetic_tree::draw_remote(const char* name, Remote_node& node)
+void Alphabetic_tree::draw_remote(const char* version, Remote_node& node)
 {
-    if (ImGui::TreeNode(name)) {
+    if (ImGui::TreeNode(version)) {
         for (auto& it : node.users) {
             user = it.first;
             draw_user(it.first.c_str(), it.second);
@@ -127,9 +153,9 @@ void Alphabetic_tree::draw_remote(const char* name, Remote_node& node)
     }
 }
 
-void Alphabetic_tree::draw_user(const char* name, User_node& node)
+void Alphabetic_tree::draw_user(const char* version, User_node& node)
 {
-    if (ImGui::TreeNode(name)) {
+    if (ImGui::TreeNode(version)) {
         for (auto& it: node.channels) {
             channel = it.first;
             draw_channel(it.first.c_str(), it.second);
@@ -138,23 +164,24 @@ void Alphabetic_tree::draw_user(const char* name, User_node& node)
     }
 }
 
-void Alphabetic_tree::draw_channel(const char* name, Channel_node& node)
+void Alphabetic_tree::draw_channel(const char* version, Channel_node& node)
 {
-    if (ImGui::TreeNode(name)) {
-        for (auto& it : node.versions) {
-            version = it.first;
-            draw_version(it.first.c_str(), it.second);
+    if (ImGui::TreeNode(version)) {
+        for (auto& package: node.packages) {
+            draw_package(package);
         }
         ImGui::TreePop();
     }
 }
 
-void Alphabetic_tree::draw_version(const char* name, Version_node& node)
+void Alphabetic_tree::draw_package(Package_node& node)
 {
-    ImGui::PushID(name);
+    version = node.version;
+
+    ImGui::PushID(version.c_str());
 
     ImGui::AlignTextToFramePadding();
-    auto open = ImGui::TreeNode(name);
+    auto open = ImGui::TreeNode(node.version.c_str());
 
     ImGui::SameLine();
 

@@ -1573,11 +1573,11 @@ bool ImGui::BeginCombo(const char* label, const char* preview_value, ImGuiComboF
         SetNextWindowSizeConstraints(ImVec2(w, 0.0f), ImVec2(FLT_MAX, CalcMaxPopupHeightFromItemCount(popup_max_height_in_items)));
     }
 
-    char name[16];
-    ImFormatString(name, IM_ARRAYSIZE(name), "##Combo_%02d", g.BeginPopupStack.Size); // Recycle windows based on depth
+    char version[16];
+    ImFormatString(version, IM_ARRAYSIZE(version), "##Combo_%02d", g.BeginPopupStack.Size); // Recycle windows based on depth
 
     // Peak into expected window size so we can position it
-    if (ImGuiWindow* popup_window = FindWindowByName(name))
+    if (ImGuiWindow* popup_window = FindWindowByName(version))
         if (popup_window->WasActive)
         {
             ImVec2 size_expected = CalcWindowExpectedSize(popup_window);
@@ -1593,7 +1593,7 @@ bool ImGui::BeginCombo(const char* label, const char* preview_value, ImGuiComboF
 
     // Horizontally align ourselves with the framed text
     PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(style.FramePadding.x, style.WindowPadding.y));
-    bool ret = Begin(name, NULL, window_flags);
+    bool ret = Begin(version, NULL, window_flags);
     PopStyleVar();
     if (!ret)
     {

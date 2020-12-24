@@ -131,7 +131,7 @@ void Cache_db::get_list(std::function<bool(SQLite::Row)> row_cb, std::string_vie
 {
     while (execute(get_list_stmt, { std::string{name_filter} })) {
         auto row = get_row(get_list_stmt);
-        std::cout << std::get<3>(row[1]) << std::endl;
+        // std::cout << std::get<3>(row[1]) << std::endl;
         if (!row_cb(row)) break;
     }
 }
