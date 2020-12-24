@@ -1,5 +1,6 @@
 #pragma once
 
+#include <vector>
 #include <string>
 
 
@@ -20,7 +21,7 @@ struct Package_info {
     std::string license;
     std::string provides;
     std::string author;
-    std::string topics;
+    std::vector<std::string> topics;
     std::string creation_date;
 };
 

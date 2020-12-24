@@ -4,6 +4,7 @@
 #include <ctype.h>
 #include <fmt/format.h>
 #include <imgui.h>
+#include "./string_utils.h"
 #include "./repo_reader.h"
 #include "./alphabetic_tree.h"
 
@@ -225,6 +226,7 @@ void Alphabetic_tree::draw_package(Package_node& node)
         if (node.pkg_info.ready()) {
             const auto& info = node.pkg_info.value();
             ImGui::Text("License: %s", info.license.c_str());
+            ImGui::Text("Topics: %s", join_strings(info.topics, ", ").c_str());
         }
         else {
             ImGui::TextUnformatted("(please wait...)");

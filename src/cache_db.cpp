@@ -168,5 +168,8 @@ auto Cache_db::get_package_info(int64_t pkg_id) -> std::optional<Package_info>
 
 void Cache_db::upsert_package_info(int64_t pkg_id, const Package_info& info)
 {
-    execute(upsert_pkg_info, { pkg_id, info.description, info.license, info.provides, info.author, info.topics, nullptr /* TODO */ });
+    execute(
+        upsert_pkg_info, 
+        { pkg_id, info.description, info.license, info.provides, info.author, join_strings(info.topics) /* TODO */, nullptr /* TODO */ }
+    );
 }

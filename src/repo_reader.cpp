@@ -9,6 +9,46 @@
 #include "./repo_reader.h"
 
 
+static auto parseTagList(std::string_view text) -> std::vector<std::string>
+{
+    // using namespace std::string_literals;
+
+    std::vector<std::string> list;
+
+    if (text.empty()) return list;
+
+    auto it = text.begin();
+
+    if (text.front() == '(' && text.back() == ')')
+        ++it;
+    else if (text == "None")
+        return list;
+    else
+        throw std::runtime_error(fmt::format("Tag list has incorrect (unparsable) format: {}", text));
+
+    for (;;) {
+        while (isspace(*it)) it ++;
+        if (*it != '\'') 
+            throw std::runtime_error(fmt::format("Expected ' at position {0} of \"{1}\"", it - text.begin(), text));
+        ++it;
+        auto i1{it};
+        while (*it != '\'') {
+            if (*it == '\\') ++it;
+            ++it;
+        }
+        list.push_back(std::string{i1, it});
+        ++it;
+        while (isspace(*it)) it++;
+        if (*it == ',')
+            ++it;
+        else if (*it == ')') 
+            return list;
+        else
+            throw std::runtime_error(fmt::format("Expected , or ) at position {0} of \"{1}\"", it - text.begin(), text));
+    }
+}
+
+
 namespace Conan {
     
     Repository_reader::Repository_reader()
@@ -99,7 +139,7 @@ namespace Conan {
                     else if (m[1] == "license"    ) info.license     = m[2];
                     else if (m[1] == "provides"   ) info.provides    = m[2];
                     else if (m[1] == "author"     ) info.author      = m[2];
-                    else if (m[1] == "topics"     ) info.topics      = m[2];
+                    else if (m[1] == "topics"     ) info.topics      = parseTagList(m[2].str());
                 }
                 else {
                     std::cerr << "***FAILED to parse info line \"" << input << "\"" << std::endl;
