@@ -256,28 +256,32 @@ namespace SQLite {
 
         Row row;
         for (auto i = 0U; i < sqlite3_column_count(stmt); i++) {
-            auto type = sqlite3_column_decltype(stmt, i);
-            if (type == nullptr || "INTEGER"s == type)
-                row.push_back(Value{sqlite3_column_int64 (stmt, i)});
-            else if ("FLOAT"s == type) 
-                row.push_back(Value{sqlite3_column_double(stmt, i)});
-            else if ("BLOB"s == type) {
-                auto data = (const uint8_t*)sqlite3_column_blob(stmt, i);
-                auto size = sqlite3_column_bytes(stmt, i);
-                row.push_back(std::move(Blob{data, data + size}));
-            }
-            else if ("STRING"s == type) {
-                auto text = (const char*)sqlite3_column_text(stmt, i);
-                row.push_back(Value{text ? text : ""});
-            }
-            else if ("NULL"s == type)
+            if (sqlite3_column_type(stmt, i) == SQLITE_NULL)
                 row.push_back(Value{nullptr});
-            else if ("DATETIME"s == type) {
-                auto text = (const char*)sqlite3_column_text(stmt, i);
-                row.push_back(Value{ text ? text : "" });
+            else {
+                auto type = sqlite3_column_decltype(stmt, i);
+                if (type == nullptr || "INTEGER"s == type)
+                    row.push_back(Value{sqlite3_column_int64 (stmt, i)});
+                else if ("FLOAT"s == type) 
+                    row.push_back(Value{sqlite3_column_double(stmt, i)});
+                else if ("BLOB"s == type) {
+                    auto data = (const uint8_t*)sqlite3_column_blob(stmt, i);
+                    auto size = sqlite3_column_bytes(stmt, i);
+                    row.push_back(std::move(Blob{data, data + size}));
+                }
+                else if ("STRING"s == type) {
+                    auto text = (const char*)sqlite3_column_text(stmt, i);
+                    row.push_back(Value{text ? text : ""});
+                }
+                else if ("NULL"s == type)
+                    row.push_back(Value{nullptr});
+                else if ("DATETIME"s == type) {
+                    auto text = (const char*)sqlite3_column_text(stmt, i);
+                    row.push_back(Value{ text ? text : "" });
+                }
+                else
+                    assert(false);
             }
-            else 
-                assert(false);
         }
         return row;
     }

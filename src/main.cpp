@@ -75,8 +75,6 @@ int main(int, char **)
 
         Conan::Repository_reader repo_reader;
 
-        std::future<void> queued_op;
-
         imgui_init("Conan GUI");
 
         Alphabetic_tree alphabetic_tree{ repo_reader };
@@ -87,9 +85,6 @@ int main(int, char **)
             imgui_new_frame();
 
             if (ImGui::Begin("Conan")) {
-                if (ImGui::Button("Re-read all repositories")) {
-                    queued_op = repo_reader.requeue_all();
-                }
                 alphabetic_tree.draw();
             }
             ImGui::End();

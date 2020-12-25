@@ -24,7 +24,7 @@ add_executable(
   sqlite_wrapper/database.cpp sqlite_wrapper/database.h
 
   async_data.h
-  string_utils.h
+  string_utils.h string_utils.cpp
 )
 
 target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_17 cxx_std_20)

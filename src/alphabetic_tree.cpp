@@ -40,6 +40,10 @@ void Alphabetic_tree::get_from_database()
 
 void Alphabetic_tree::draw()
 {
+    if (ImGui::Button("Re-read all repositories")) {
+        full_scan = repo_reader.requeue_all();
+    }
+
     for (auto& it : root) {
         draw_letter_node(it.first, it.second);
     }
@@ -73,7 +77,18 @@ void Alphabetic_tree::add_row_to_references_list(References_list& ref_list, cons
 
     package_node.pkg_id = std::get<1>(row[0]);
     package_node.version = version;
-    package_node.description = std::get<3>(row[6]);
+
+    // Do we have description (non-null) ? then we have the package info
+    if (row[6].index() == 3) {
+        package_node.pkg_info = Package_info {
+            .description = std::get<3>(row[6]),
+            .license     = row[ 7].index() == 0 ? "" : std::get<3>(row[7]),
+            .provides    = row[ 8].index() == 0 ? "" : std::get<3>(row[8]),
+            .author      = row[ 9].index() == 0 ? "" : std::get<3>(row[9]),
+            .topics      = parseTagList(row[10].index() == 3 ? std::get<3>(row[10]) : ""),
+            // .creation_date = std::get<3>(row[11])
+        };
+    }
 }
 
 void Alphabetic_tree::draw_letter_node(char letter, Letter_node& node)
@@ -105,16 +120,22 @@ void Alphabetic_tree::draw_letter_node(char letter, Letter_node& node)
             );
         }
     }
-    if (!node.scan.valid()) {
-        if (ImGui::Button("Re-scan")) {
-            node.scan = std::async(
-                std::launch::async, 
-                [this, letter]() { repo_reader.read_letter_all_repositories(letter); }
-            );
+    if (!full_scan.valid()) {
+        if (!node.scan.valid()) {
+            if (ImGui::Button("Re-scan")) {
+                node.scan = std::async(
+                    std::launch::async, 
+                    [this, letter]() { 
+                        repo_reader.read_letter_all_repositories(letter); 
+                    }
+                );
+            }
         }
+        else 
+            ImGui::TextUnformatted("(scanning...)");
     }
     else 
-        ImGui::TextUnformatted("(scanning...)");
+        ImGui::TextUnformatted("(Full scan running...)");
 
     if (node.fetch.valid()) {
         if (node.fetch.wait_for(0s) == std::future_status::ready) {
@@ -184,46 +205,25 @@ void Alphabetic_tree::draw_package(Package_node& node)
     ImGui::AlignTextToFramePadding();
     auto open = ImGui::TreeNode(node.version.c_str());
 
-    ImGui::SameLine();
+    bool requery = false;
 
-    auto requery = false;
-    if (node.pkg_info.busy() && !node.pkg_info.ready()) {
-        ImGui::TextUnformatted("(Querying...)");
-    }
+    ImGui::SameLine();
+    if (full_scan.valid())
+        ImGui::TextUnformatted("(Full scan running...)");
     else {
-        requery = ImGui::Button("Re-query");
-        if (requery)
-            node.pkg_info.reset();
-    }
-
-    ImGui::SameLine();
-    ImGui::TextUnformatted(node.description.c_str());
-
-    if (requery || open && !node.pkg_info.ready()) {
-        if (node.pkg_info.blank()) {
-            node.pkg_info.obtain(
-                [this, &node](const Package_key key, int64_t pkg_id, bool requery) {
-                    Cache_db db;
-                    std::optional<Package_info> info;
-                    if (!requery) {
-                        info = db.get_package_info(pkg_id);
-                    }
-                    if (!info) {
-                        info = repo_reader.get_info(key);
-                        node.description = info->description;
-                        db.upsert_package_info(pkg_id, *info);
-                    }
-                    return *info;
-                },
-                Package_key{ remote, package, user, channel, version },
-                node.pkg_id,
-                requery || node.description.empty()
-            );
+        if (node.get_info_fut.valid()) {
+            ImGui::TextUnformatted("(Querying...)");
+        }
+        else {
+            requery = ImGui::Button("Re-query");
         }
     }
 
+    ImGui::SameLine();
+    ImGui::TextUnformatted(node.pkg_info ? node.pkg_info->description.c_str() : "(please wait...)");
+
     if (open) {
-        if (node.pkg_info.ready()) {
+        if (node.pkg_info) {
             const auto& info = node.pkg_info.value();
             ImGui::Text("License: %s", info.license.c_str());
             ImGui::Text("Topics: %s", join_strings(info.topics, ", ").c_str());
@@ -232,6 +232,28 @@ void Alphabetic_tree::draw_package(Package_node& node)
             ImGui::TextUnformatted("(please wait...)");
         }
         ImGui::TreePop();
+    }
+
+    if (requery || !node.pkg_info) {
+        if (requery) 
+            node.get_info_fut = {};
+        if (!node.get_info_fut.valid()) {
+            node.get_info_fut = std::async(
+                std::launch::async,
+                [this, &node](const Package_key key, int64_t pkg_id) {
+                    Cache_db db;
+                    auto info = repo_reader.get_info(key);
+                    db.upsert_package_info(pkg_id, info);
+                    return info;
+                },
+                Package_key{ remote, package, user, channel, version },
+                node.pkg_id
+            );
+        }
+    }
+
+    if (node.get_info_fut.valid() && node.get_info_fut.wait_for(std::chrono::milliseconds(0)) == std::future_status::ready) {
+        node.pkg_info = node.get_info_fut.get();
     }
 
     ImGui::PopID();

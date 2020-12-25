@@ -57,14 +57,15 @@ struct Alphabetic_tree {
     struct Package_node {
         int64_t pkg_id = 0;
         std::string version;
-        std::string description = {};
-        async_data<Package_info> pkg_info = {};
+        std::optional<Package_info> pkg_info; // TODO: rename ?
+        std::future<Package_info> get_info_fut;
+        // async_data<Package_info> pkg_info;
 
         Package_node(Package_node&& src) noexcept :
-            pkg_id{src.pkg_id},
-            version{src.version},
-            description{std::move(src.description)},
-            pkg_info{std::move(src.pkg_info)}
+            pkg_id{std::move(src.pkg_id)},
+            version{std::move(src.version)},
+            pkg_info{std::move(src.pkg_info)},
+            get_info_fut{std::move(src.get_info_fut)}
         {}
         Package_node& operator = (Package_node&&) noexcept = default;
         Package_node() = default;
@@ -95,5 +96,7 @@ private:
 
     std::string                 remote, package, user, channel, version;
     // uint64_t                    pkg_id = {};
+
+    std::future<void>           full_scan;
 };
 
