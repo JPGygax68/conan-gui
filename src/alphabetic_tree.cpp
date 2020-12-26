@@ -6,6 +6,7 @@
 #include <imgui.h>
 #include "./string_utils.h"
 #include "./repo_reader.h"
+#include "./job_queue.h"
 #include "./alphabetic_tree.h"
 
 
@@ -238,17 +239,32 @@ void Alphabetic_tree::draw_package(Package_node& node)
         if (requery) 
             node.get_info_fut = {};
         if (!node.get_info_fut.valid()) {
-            node.get_info_fut = std::async(
-                std::launch::async,
-                [this, &node](const Package_key key, int64_t pkg_id) {
-                    Cache_db db;
-                    auto info = repo_reader.get_info(key);
-                    db.upsert_package_info(pkg_id, info);
-                    return info;
-                },
-                Package_key{ remote, package, user, channel, version },
-                node.pkg_id
+            node.get_info_fut = node.get_info_prom.get_future();
+            Job_queue::instance().queue_job(
+                [this](Package_key key, int64_t pkg_id, std::promise<Package_info>& promise) {
+                    return [this, key, pkg_id, &promise]() {
+                        auto info = repo_reader.get_info(key);
+                        Cache_db db;
+                        db.upsert_package_info(pkg_id, info);
+                        promise.set_value(info);
+                    };
+                } (
+                    Package_key{ remote, package, user, channel, version },
+                    node.pkg_id,
+                    node.get_info_prom
+                )
             );
+            // node.get_info_fut = std::async(
+            //     std::launch::async,
+            //     [this, &node](const Package_key key, int64_t pkg_id) {
+            //         auto info = repo_reader.get_info(key);
+            //         Cache_db db;
+            //         db.upsert_package_info(pkg_id, info);
+            //         return info;
+            //     },
+            //     Package_key{ remote, package, user, channel, version },
+            //     node.pkg_id
+            // );
         }
     }
 

@@ -73,7 +73,7 @@ namespace SQLite {
         using select_callback = std::function<int(int col_count, const char* const col_names[], const char* const col_values[])>;
 
         Database(const char *filename);
-        ~Database();
+        virtual ~Database();
 
         void select(const char* statement, select_callback);
 
@@ -92,8 +92,8 @@ namespace SQLite {
             std::string_view table,
             std::initializer_list<std::string_view> group_by_cols,
             std::initializer_list<std::string_view> data_cols,
-            std::string where_clause,
-            std::string order_by_clause = ""
+            std::string where,
+            std::string order_by = ""
         ) -> Query_result_node<Cargo>;
 
         // Prepare a "select" statement.

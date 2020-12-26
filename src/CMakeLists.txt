@@ -21,6 +21,8 @@ add_executable(
 
   cache_db.cpp cache_db.h
 
+  job_queue.h
+
   sqlite_wrapper/database.cpp sqlite_wrapper/database.h
 
   async_data.h

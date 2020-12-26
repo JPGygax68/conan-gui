@@ -13,7 +13,7 @@ auto parseTagList(std::string_view text) -> std::vector<std::string>
 
     auto it = text.begin();
 
-    if (text.front() == '(' && text.back() == ')')
+    if (text.front() == '(' && text.back() == ')' || text.front() == '[' && text.back() == ']')
         ++it;
     else if (text == "None")
         return list;
@@ -22,26 +22,45 @@ auto parseTagList(std::string_view text) -> std::vector<std::string>
 
     for (;;) {
         while (isspace(*it)) it++;
-        //if (*it != '\'')
-        //    throw std::runtime_error(fmt::format("Expected ' at position {0} of \"{1}\"", it - text.begin(), text));
-        ++it;
-        auto i1{ it };
-        if (*it == '\'') ++it;
-        while (*i1 == '\'' && *it != '\'' || it != end(text) && *it != ',') {
-            if (*it == '\\') ++it;
+        if (it == end(text)) break;
+        if (*it == '\'') {
+            ++it;
+            auto i1{ it };
+            while (it != end(text) && *it != '\'') {
+                if (*it == '\\') ++it;
+                if (it == end(text))
+                    throw std::runtime_error(fmt::format("Syntax error: end of string inside escaped character at position {0} of \"{1}\"", it - text.begin(), text));
+                ++it;
+            }
+            list.push_back(std::string{i1, it});
+            if (it == end(text)) break;
             ++it;
         }
-        list.push_back(std::string{ i1, it });
-        if (*i1 == '\'') ++it;
-        if (it == end(text))
-            break;
+        else {
+            auto i1{ it };
+            while (it != end(text) && *it != ',') {
+                if (*it == '\\') ++it;
+                if (it == end(text))
+                    throw std::runtime_error(fmt::format("Syntax error: end of string inside escaped character at position {0} of \"{1}\"", it - text.begin(), text));
+                ++it;
+            }
+            list.push_back(std::string{i1, it});
+            if (it == end(text)) break;
+        }
         while (isspace(*it)) it++;
+        if (it == end(text)) break;
         if (*it == ',')
             ++it;
-        else if (text[0] == '(' && *it == ')')
-            break;
+        else if (text.front() == '(') {
+            if (*it == ')')
+                break;
+        }
+        else if (text.front() == '[') {
+            if (*it == ']')
+                break;
+        }
         else
-            throw std::runtime_error(fmt::format("Expected , or ) at position {0} of \"{1}\"", it - text.begin(), text));
+            throw std::runtime_error(fmt::format("Expected , ) or ] at position {0} of \"{1}\"", it - text.begin(), text));
     }
 
     return list;

@@ -86,7 +86,7 @@ namespace Conan {
         std::thread                 reader_thread;
         Task_queue                  task_queue;
         std::condition_variable     reader_cv;
-        bool                        terminate = false;
+        bool                        term_flag = false;
     };
 
 } // ns Conan

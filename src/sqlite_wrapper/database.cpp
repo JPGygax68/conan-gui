@@ -43,7 +43,7 @@ namespace SQLite {
 
         std::filesystem::create_directories(path{filename}.parent_path());
 
-        auto db_err = sqlite3_open_v2(filename, &db_handle, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_NOMUTEX, nullptr);
+        auto db_err = sqlite3_open_v2(filename, &db_handle, SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX, nullptr);
         if (db_err != SQLITE_OK) throw sqlite_error(db_handle, db_err, "trying to open/create database");
     }
 

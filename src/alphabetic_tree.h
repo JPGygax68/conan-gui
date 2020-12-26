@@ -58,6 +58,7 @@ struct Alphabetic_tree {
         int64_t pkg_id = 0;
         std::string version;
         std::optional<Package_info> pkg_info; // TODO: rename ?
+        std::promise<Package_info> get_info_prom;
         std::future<Package_info> get_info_fut;
         // async_data<Package_info> pkg_info;
 

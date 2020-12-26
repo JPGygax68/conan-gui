@@ -117,7 +117,7 @@ namespace Conan {
     [[deprecated]]
     void Repository_reader::reader_func()
     {
-        while (!terminate) {
+        while (!term_flag) {
             std::unique_lock<std::mutex> lock(task_queue.mutex);
             reader_cv.wait(lock, [this] { return !task_queue.empty(); });
             auto task = task_queue.top();
@@ -135,7 +135,7 @@ namespace Conan {
     void Repository_reader::start_reader_thread_if_not_running()
     {
         if (!reader_thread.joinable()) {
-            terminate = false;
+            term_flag = false;
             reader_thread = std::thread([this]() { reader_func(); });
         }
     }
@@ -143,7 +143,7 @@ namespace Conan {
     void Repository_reader::stop_reader_thread()
     {
         if (reader_thread.joinable()) {
-            terminate = true;
+            term_flag = true;
             reader_cv.notify_one();
             reader_thread.join();
         }
