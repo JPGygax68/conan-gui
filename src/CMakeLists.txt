@@ -13,6 +13,8 @@ add_executable(
 
   imgui_app.h imgui_app_vulkan.cpp
 
+  gui_elements.h gui_elements.cpp
+
   types.h
 
   repo_reader.cpp repo_reader.h
@@ -34,13 +36,15 @@ target_compile_features(${PROJECT_NAME} PRIVATE cxx_std_17 cxx_std_20)
 target_include_directories(${PROJECT_NAME} PRIVATE imgui imgui/backends)
 
 find_package(Vulkan REQUIRED)
+find_package(SDL2 CONFIG REQUIRED)
+find_package(SQLite3 CONFIG REQUIRED)
 
 target_link_libraries(
   ${PROJECT_NAME}
   PRIVATE
-    CONAN_PKG::sdl2
-    CONAN_PKG::fmt
-    CONAN_PKG::sqlite3
+    SDL2::SDL2
+    # CONAN_PKG::fmt
+    SQLite::SQLite
     Vulkan::Vulkan
 )
 

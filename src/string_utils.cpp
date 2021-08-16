@@ -1,5 +1,5 @@
 #include <stdexcept>
-#include <fmt/format.h>
+#include <format>
 #include "./string_utils.h"
 
 
@@ -29,7 +29,7 @@ auto parseTagList(std::string_view text) -> std::vector<std::string>
             while (it != end(text) && *it != '\'') {
                 if (*it == '\\') ++it;
                 if (it == end(text))
-                    throw std::runtime_error(fmt::format("Syntax error: end of string inside escaped character at position {0} of \"{1}\"", it - text.begin(), text));
+                    throw std::runtime_error(std::format("Syntax error: end of string inside escaped character at position {0} of \"{1}\"", it - text.begin(), text));
                 ++it;
             }
             list.push_back(std::string{i1, it});
@@ -41,7 +41,7 @@ auto parseTagList(std::string_view text) -> std::vector<std::string>
             while (it != end(text) && *it != ',') {
                 if (*it == '\\') ++it;
                 if (it == end(text))
-                    throw std::runtime_error(fmt::format("Syntax error: end of string inside escaped character at position {0} of \"{1}\"", it - text.begin(), text));
+                    throw std::runtime_error(std::format("Syntax error: end of string inside escaped character at position {0} of \"{1}\"", it - text.begin(), text));
                 ++it;
             }
             list.push_back(std::string{i1, it});
@@ -60,7 +60,7 @@ auto parseTagList(std::string_view text) -> std::vector<std::string>
                 break;
         }
         else
-            throw std::runtime_error(fmt::format("Expected , ) or ] at position {0} of \"{1}\"", it - text.begin(), text));
+            throw std::runtime_error(std::format("Expected , ) or ] at position {0} of \"{1}\"", it - text.begin(), text));
     }
 
     return list;

@@ -2,7 +2,7 @@
 #include <filesystem>
 #include <string>
 #include <regex>
-#include <fmt/format.h>
+#include <format>
 #include "./cache_db.h"
 
 
@@ -77,6 +77,10 @@ Cache_db::Cache_db():
         { "pkg_id"}, 
         { "description", "license", "provides", "author", "topics", "creation_date", "last_poll" }
     );
+
+    upsert_letter_scan_time = prepare_statement(R"(
+        INSERT INTO letter_scans (letter, last_scan) VALUES(?1, datetime('now')) ON CONFLICT(letter) DO UPDATE SET last_scan=datetime('now'); 
+    )");
 }
 
 Cache_db::~Cache_db()
@@ -84,6 +88,7 @@ Cache_db::~Cache_db()
     sqlite3_finalize(get_list_stmt);
     sqlite3_finalize(get_pkg_info);
     sqlite3_finalize(upsert_pkg_info);
+    sqlite3_finalize(upsert_letter_scan_time);
 }
 
 void Cache_db::create_or_update()
@@ -91,7 +96,7 @@ void Cache_db::create_or_update()
     auto version = std::get<int64_t>(select_one("PRAGMA user_version")[0]);
     std::cout << "version: " << version << std::endl;
 
-    if (version >= 14) return;
+    if (version >= 15) return;
 
     execute( R"(
 
@@ -122,7 +127,12 @@ void Cache_db::create_or_update()
         );
         CREATE UNIQUE INDEX IF NOT EXISTS pkg_info_pkg_id ON pkg_info (pkg_id);
 
-        PRAGMA user_version = 14;
+        CREATE TABLE IF NOT EXISTS letter_scans (
+            letter CHAR PRIMARY KEY,
+            last_scan DATETIME
+        );
+
+        PRAGMA user_version = 15;
 
     )", "trying to create packages2 table");
 }
@@ -140,7 +150,7 @@ void Cache_db::upsert_package(std::string_view remote, std::string_view name, st
 {
     // TODO: use prepared statement!
 
-    auto statement = fmt::format(R"(
+    auto statement = std::format(R"(
         INSERT INTO packages2 (remote, name, version, user, channel, last_poll)
             values('{0}', '{1}', '{2}', '{3}', '{4}', datetime('now'))
         ON CONFLICT (remote, name, version, user, channel) DO UPDATE SET last_poll=datetime('now');
@@ -171,5 +181,12 @@ void Cache_db::upsert_package_info(int64_t pkg_id, const Package_info& info)
     execute(
         upsert_pkg_info, 
         { pkg_id, info.description, info.license, info.provides, info.author, join_strings(info.topics) /* TODO */, nullptr /* TODO */ }
+    );
+}
+
+void Cache_db::mark_letter_as_scanned(char letter)
+{
+    execute(
+        upsert_letter_scan_time, { letter }
     );
 }

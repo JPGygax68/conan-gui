@@ -4,7 +4,7 @@
 #include <future>
 #include <regex>
 #include <cassert>
-#include <fmt/core.h>
+#include <format>
 #include "./cache_db.h"
 #include "./repo_reader.h"
 
@@ -32,28 +32,6 @@ namespace Conan {
         });
     }
     
-    Repository_reader::~Repository_reader()
-    {
-        stop_reader_thread();
-    }
-
-    auto Repository_reader::requeue_all() -> std::future<void>
-    {
-        return std::async(std::launch::async, [this]() {
-            auto& remotes = remotes_ad.get();
-            for (auto& remote: remotes)
-                queue_repository(remote);
-        });
-    }
-
-    void Repository_reader::queue_repository(std::string_view repo)
-    {
-        for (char letter = 'A'; letter <= 'Z'; letter ++) {
-            filtered_read(repo, fmt::format("{}*", letter));
-            filtered_read(repo, fmt::format("{}*", letter + 'a' - 'A'));
-        }
-    }
-
     void Repository_reader::filtered_read(std::string_view remote, std::string_view name_filter)
     {
         update_package_list(remote, name_filter);
@@ -65,18 +43,18 @@ namespace Conan {
 
         auto& remotes = remotes_ad.get();
         for (auto& remote: remotes) {
-            filtered_read(remote, fmt::format("{}*", first_letter));
-            filtered_read(remote, fmt::format("{}*", first_letter + 'a' - 'A'));
+            filtered_read(remote, std::format("{:c}*", first_letter));
+            filtered_read(remote, std::format("{:c}*", first_letter + 'a' - 'A'));
         }
     }
 
     auto Repository_reader::get_info(const Package_key& key) -> Package_info
     {
-        std::string specifier = fmt::format("{0}/{1}@", key.reference.package, key.reference.version);
-        if (!key.reference.user.empty()) specifier += fmt::format("{0}/{1}", key.reference.user, key.reference.channel);
+        std::string specifier = std::format("{0}/{1}@", key.reference.package, key.reference.version);
+        if (!key.reference.user.empty()) specifier += std::format("{0}/{1}", key.reference.user, key.reference.channel);
             
         // auto cmd = fmt::format("conan info -r {0} {1}", remote, specifier);
-        auto cmd = fmt::format("conan inspect -r {0} {1}", key.remote, specifier);
+        auto cmd = std::format("conan inspect -r {0} {1}", key.remote, specifier);
         std::cout << "INSPECT command: " << cmd << std::endl;
         auto file_ptr = _popen(cmd.c_str(), "r");
         if (!file_ptr) throw std::system_error(errno, std::generic_category());
@@ -114,44 +92,9 @@ namespace Conan {
         return info;
     }
 
-    [[deprecated]]
-    void Repository_reader::reader_func()
-    {
-        while (!term_flag) {
-            std::unique_lock<std::mutex> lock(task_queue.mutex);
-            reader_cv.wait(lock, [this] { return !task_queue.empty(); });
-            auto task = task_queue.top();
-            lock.unlock();
-
-            std::cout << "Searching remote " << task.repository << ", letter " << task.letter << std::endl;
-
-            update_package_list(task.repository, fmt::format("{}*", task.letter));
-
-            lock.lock();
-            task_queue.pop();
-        }
-    }
-
-    void Repository_reader::start_reader_thread_if_not_running()
-    {
-        if (!reader_thread.joinable()) {
-            term_flag = false;
-            reader_thread = std::thread([this]() { reader_func(); });
-        }
-    }
-
-    void Repository_reader::stop_reader_thread()
-    {
-        if (reader_thread.joinable()) {
-            term_flag = true;
-            reader_cv.notify_one();
-            reader_thread.join();
-        }
-    }
-
     void Repository_reader::update_package_list(std::string_view remote, std::string_view name_filter) 
     {
-        auto file_ptr = _popen(fmt::format("conan search -r {} {}* --raw", remote, name_filter).c_str(), "r");
+        auto file_ptr = _popen(std::format("conan search -r {} {}* --raw", remote, name_filter).c_str(), "r");
         if (!file_ptr) throw std::system_error(errno, std::generic_category());
 
         Cache_db db;

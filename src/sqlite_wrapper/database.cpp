@@ -1,3 +1,4 @@
+#include <cassert>
 #include <string>
 #include <cstdlib>
 #include <iostream>
@@ -5,7 +6,7 @@
 #include <filesystem>
 #include <algorithm>
 #include <concepts>
-#include <fmt/core.h>
+#include <format>
 
 #include "./database.h"
 
@@ -29,7 +30,7 @@ namespace SQLite {
     private:
         static auto make_message(sqlite3* db, int code, /* const char* err_msg, */ std::string_view context) -> std::string {
             using namespace std::string_literals;
-            auto msg = fmt::format("SQLite error {0}: {1}", sqlite3_errstr(code), sqlite3_errmsg(db));
+            auto msg = std::format("SQLite error {0}: {1}", sqlite3_errstr(code), sqlite3_errmsg(db));
             // if (err_msg) msg += ": "s + err_msg;
             if (!context.empty()) { msg += "; context: "; msg += context; }
             return msg;
@@ -101,9 +102,9 @@ namespace SQLite {
     {
         using namespace std::string_literals;
 
-        auto statement = fmt::format("SELECT {0} FROM {1}", join_strings(columns), table);
-        if (!where_clause.empty()) statement += fmt::format(" WHERE {0}", where_clause);
-        if (!order_by_clause.empty()) statement += fmt::format(" ORDER BY {0}", order_by_clause);
+        auto statement = std::format("SELECT {0} FROM {1}", join_strings(columns), table);
+        if (!where_clause.empty()) statement += std::format(" WHERE {0}", where_clause);
+        if (!order_by_clause.empty()) statement += std::format(" ORDER BY {0}", order_by_clause);
 
         // Prepare the statement
         sqlite3_stmt* stmt = nullptr;
@@ -154,8 +155,8 @@ namespace SQLite {
 
     auto Database::get_row_id(std::string_view table, std::string_view where_clause) -> int64_t
     {
-        auto statement = fmt::format("select rowid from {0} where {1}", table, where_clause);
-        auto fields = query_single_row( statement.c_str(), fmt::format("trying to get rowid of table \"{0}\"", table).c_str());
+        auto statement = std::format("select rowid from {0} where {1}", table, where_clause);
+        auto fields = query_single_row( statement.c_str(), std::format("trying to get rowid of table \"{0}\"", table).c_str());
         return fields.empty() ? 0 : std::stoi(fields[0]);
     }
 
@@ -164,12 +165,12 @@ namespace SQLite {
         char* errmsg;
         int db_err;
 
-        auto statement = fmt::format(R"(
+        auto statement = std::format(R"(
             insert into {0} ({1}) values({2})
         )", table, columns, values);
         db_err = sqlite3_exec(db_handle, statement.c_str(), nullptr, nullptr, &errmsg);
 
-        if (db_err != 0) throw sqlite_error(db_handle, db_err, fmt::format("trying to insert into table \"{0}\"", table));
+        if (db_err != 0) throw sqlite_error(db_handle, db_err, std::format("trying to insert into table \"{0}\"", table));
 
         return sqlite3_last_insert_rowid(db_handle);
     }
@@ -184,23 +185,23 @@ namespace SQLite {
 
         std::vector<std::string> all_columns, unique_equals;
         for (auto i = 0U; auto & col: unique_columns) {
-            unique_equals.push_back(fmt::format("{0}=?{1}", col, ++i));
+            unique_equals.push_back(std::format("{0}=?{1}", col, ++i));
             all_columns.push_back(std::string{ col });
         }
         for (auto& col : extra_columns)
             all_columns.push_back(std::string{ col });
 
         std::vector<std::string> all_placeholders, extra_placeholders, extra_setters;
-        for (auto i = 0U; auto & col: unique_columns) all_placeholders.push_back(fmt::format("?{0}", ++i));
+        for (auto i = 0U; auto & col: unique_columns) all_placeholders.push_back(std::format("?{0}", ++i));
         for (auto i = unique_columns.size(); auto & col: extra_columns) {
             ++i;
-            auto placeholder = fmt::format("?{0}", i);
+            auto placeholder = std::format("?{0}", i);
             all_placeholders.push_back(placeholder);
             extra_placeholders.push_back(placeholder);
-            extra_setters.push_back(fmt::format("{0}=?{1}", col, i));
+            extra_setters.push_back(std::format("{0}=?{1}", col, i));
         }
 
-        auto statement = fmt::format("INSERT INTO {0} ({1}) VALUES({2}) ON CONFLICT({3}) DO UPDATE SET {4};",
+        auto statement = std::format("INSERT INTO {0} ({1}) VALUES({2}) ON CONFLICT({3}) DO UPDATE SET {4};",
             /* 0 */ table,
             /* 1 */ join_strings(all_columns, ", "),
             /* 2 */ join_strings(all_placeholders, ", "),
@@ -288,7 +289,7 @@ namespace SQLite {
 
     void Database::drop_table(std::string_view version)
     {
-        exec(fmt::format("drop table if exists {0};", version).c_str(), fmt::format("trying to drop table \"{0}\"", version));
+        exec(std::format("drop table if exists {0};", version).c_str(), std::format("trying to drop table \"{0}\"", version));
     }
 
     auto Database::escape_single_quotes(std::string_view s) -> std::string

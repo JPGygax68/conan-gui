@@ -24,6 +24,12 @@ struct Alphabetic_tree {
         std::future<void> scan;     // Repo Reader
         std::future<void> fetch;    // Cache DB
         References_list temp_packages;
+
+        bool scanning() const { return scan.valid(); }
+        bool scan_done() const { return scan.wait_for(std::chrono::milliseconds(0)) == std::future_status::ready; }
+
+        bool fetching() const { return fetch.valid(); }
+        bool fetching_done() const { return fetch.wait_for(std::chrono::milliseconds(0)) == std::future_status::ready; }
     };
 
     struct Reference_node {
@@ -80,6 +86,14 @@ struct Alphabetic_tree {
 
 private:
 
+    struct Full_Scan {
+        std::future<void>           future;
+        std::atomic<char>           current_letter;
+
+        bool running() const { return future.valid(); }
+        bool done() const { return future.wait_for(std::chrono::milliseconds(0)) == std::future_status::ready; }
+    };
+
     void add_row_to_references_list(References_list& pkg_list, const SQLite::Row& row, const SQLite::Row& prev_row);
 
     void draw_letter_node(char letter, Letter_node& node);
@@ -98,6 +112,6 @@ private:
     std::string                 remote, package, user, channel, version;
     // uint64_t                    pkg_id = {};
 
-    std::future<void>           full_scan;
+    Full_Scan                   full_scan;
 };
 

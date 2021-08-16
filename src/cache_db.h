@@ -23,8 +23,11 @@ public:
     auto get_package_info(int64_t pkg_id) -> std::optional<Package_info>;
     void upsert_package_info(int64_t pkg_id, const Package_info&);
 
+    void mark_letter_as_scanned(char letter);
+
 private:
     sqlite3_stmt *      get_list_stmt = nullptr;
     sqlite3_stmt *      get_pkg_info = nullptr;
     sqlite3_stmt *      upsert_pkg_info = nullptr;
+    sqlite3_stmt *      upsert_letter_scan_time = nullptr;
 };

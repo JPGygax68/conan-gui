@@ -2,17 +2,19 @@
 #include <ranges>
 #include <algorithm>
 #include <ctype.h>
-#include <fmt/format.h>
+#include <format>
 #include <imgui.h>
 #include "./string_utils.h"
 #include "./repo_reader.h"
 #include "./job_queue.h"
+#include "./gui_elements.h"
 #include "./alphabetic_tree.h"
 
 
 Alphabetic_tree::Alphabetic_tree(Conan::Repository_reader& rr):
     repo_reader{rr}
 {
+
     // TODO: move to Cache_db
     info_query = database.prepare_statement(R"(
         SELECT remote, url, license, description, provides, author, topics, creation_date, last_poll
@@ -24,6 +26,7 @@ Alphabetic_tree::Alphabetic_tree(Conan::Repository_reader& rr):
 void Alphabetic_tree::get_from_database()
 {
     root.clear();
+    for (char letter = 'A'; letter <= 'Z'; letter++) root[letter] = {};
 
     SQLite::Row prev_row = { {" "}, {" "}, {" "}, {" "}, {" "}, {" "} };
 
@@ -41,8 +44,12 @@ void Alphabetic_tree::get_from_database()
 
 void Alphabetic_tree::draw()
 {
-    if (ImGui::Button("Re-read all repositories")) {
-        full_scan = repo_reader.requeue_all();
+    if (!full_scan.running()) {
+        if (ImGui::Button("Re-read all repositories")) {
+            // TODO: queue scans for all nodes
+        }
+    } else {
+        gui::FormattedText("Full-scan underway (scanning letter {:c})", full_scan.current_letter.load());
     }
 
     for (auto& it : root) {
@@ -94,16 +101,18 @@ void Alphabetic_tree::add_row_to_references_list(References_list& ref_list, cons
 
 void Alphabetic_tree::draw_letter_node(char letter, Letter_node& node)
 {
-    using namespace std::chrono_literals;
+    // using namespace std::chrono_literals;
 
     ImGui::AlignTextToFramePadding();
     auto open = ImGui::TreeNode(std::string{letter}.c_str());
     ImGui::SameLine();
 
-    if (node.scan.valid()) {
-        if (node.scan.wait_for(0s) == std::future_status::ready) {
+    // Are we scanning this letter ?
+    if (node.scanning()) {
+        if (node.scan_done()) {
             (void)node.scan.get();
             node.temp_packages.clear(); // just in case
+            // Start the database fetch operation
             node.fetch = std::async(
                 std::launch::async,
                 [this, letter, &node]() {
@@ -115,19 +124,20 @@ void Alphabetic_tree::draw_letter_node(char letter, Letter_node& node)
                             prev_row = row;
                             return true;
                         },
-                        fmt::format("{0}%", letter)
+                        std::format("{0}%", letter)
                     );     
                 }
             );
         }
     }
-    if (!full_scan.valid()) {
-        if (!node.scan.valid()) {
+    if (!full_scan.running()) {
+        if (!node.scanning()) {
             if (ImGui::Button("Re-scan")) {
                 node.scan = std::async(
                     std::launch::async, 
                     [this, letter]() { 
-                        repo_reader.read_letter_all_repositories(letter); 
+                        repo_reader.read_letter_all_repositories(letter);
+                        database.mark_letter_as_scanned(letter);
                     }
                 );
             }
@@ -138,8 +148,8 @@ void Alphabetic_tree::draw_letter_node(char letter, Letter_node& node)
     else 
         ImGui::TextUnformatted("(Full scan running...)");
 
-    if (node.fetch.valid()) {
-        if (node.fetch.wait_for(0s) == std::future_status::ready) {
+    if (node.fetching()) {
+        if (node.fetching_done()) {
             (void)node.fetch.get();
             node.references = std::move(node.temp_packages);
         }
@@ -209,7 +219,7 @@ void Alphabetic_tree::draw_package(Package_node& node)
     bool requery = false;
 
     ImGui::SameLine();
-    if (full_scan.valid())
+    if (full_scan.future.valid())
         ImGui::TextUnformatted("(Full scan running...)");
     else {
         if (node.get_info_fut.valid()) {

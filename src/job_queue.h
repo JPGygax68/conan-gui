@@ -21,9 +21,9 @@ public:
         }
     }
 
-    void queue_job(Job job) {
+    void queue_job(Job&& job) {
         auto lock = std::unique_lock{mutex};
-        jobs.push(job);
+        jobs.push(std::move(job));
         lock.unlock();
         if (!worker.joinable()) 
             worker = std::thread{[this]() { execute_jobs(); }};

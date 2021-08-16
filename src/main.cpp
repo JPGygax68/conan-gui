@@ -5,7 +5,7 @@
 #include <array>
 #include <span>
 #include <imgui.h>
-#include <fmt/core.h>
+#include <format>
 #include "./cache_db.h"
 #include "./repo_reader.h"
 #include "./imgui_app.h"
