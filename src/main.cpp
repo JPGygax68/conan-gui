@@ -83,7 +83,7 @@ int main(int, char **)
         while (imgui_continue()) {
     
             imgui_new_frame();
-
+            
             if (ImGui::Begin("Conan")) {
                 alphabetic_tree.draw();
             }

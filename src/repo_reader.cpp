@@ -37,15 +37,18 @@ namespace Conan {
         update_package_list(remote, name_filter);
     }
 
-    void Repository_reader::read_letter_all_repositories(char first_letter)
+    void Repository_reader::read_letter_all_repositories(char letter)
     {
-        assert(first_letter >= 'A' && first_letter <= 'Z');
+        assert(letter >= 'A' && letter <= 'Z');
 
         auto& remotes = remotes_ad.get();
         for (auto& remote: remotes) {
-            filtered_read(remote, std::format("{:c}*", first_letter));
-            filtered_read(remote, std::format("{:c}*", first_letter + 'a' - 'A'));
+            filtered_read(remote, std::format("{:c}*", letter));
+            filtered_read(remote, std::format("{:c}*", letter + 'a' - 'A'));
         }
+
+        Cache_db db;
+        db.mark_letter_as_scanned(letter);
     }
 
     auto Repository_reader::get_info(const Package_key& key) -> Package_info

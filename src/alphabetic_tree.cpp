@@ -14,7 +14,6 @@
 Alphabetic_tree::Alphabetic_tree(Conan::Repository_reader& rr):
     repo_reader{rr}
 {
-
     // TODO: move to Cache_db
     info_query = database.prepare_statement(R"(
         SELECT remote, url, license, description, provides, author, topics, creation_date, last_poll
@@ -105,6 +104,7 @@ void Alphabetic_tree::draw_letter_node(char letter, Letter_node& node)
 
     ImGui::AlignTextToFramePadding();
     auto open = ImGui::TreeNode(std::string{letter}.c_str());
+    if (!open) ImGui::PushID(&letter, &letter + 1);
     ImGui::SameLine();
 
     // Are we scanning this letter ?
@@ -137,7 +137,6 @@ void Alphabetic_tree::draw_letter_node(char letter, Letter_node& node)
                     std::launch::async, 
                     [this, letter]() { 
                         repo_reader.read_letter_all_repositories(letter);
-                        database.mark_letter_as_scanned(letter);
                     }
                 );
             }
@@ -161,7 +160,8 @@ void Alphabetic_tree::draw_letter_node(char letter, Letter_node& node)
             draw_reference(it.first.c_str(), it.second);
         }
         ImGui::TreePop();
-    }
+    } else 
+        ImGui::PopID();
 }
 
 void Alphabetic_tree::draw_reference(const char* pkg_name, Reference_node& node)
